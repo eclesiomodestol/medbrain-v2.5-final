@@ -176,56 +176,55 @@ export const Dashboard: React.FC<DashboardProps> = ({
     };
   }, [topics, subjects, studentProgress, currentUser]);
 
-  // Determine Today's Classes
+  // Determine Today's Classes based on TOPICS (ContentTracker)
   const todayClasses = useMemo(() => {
     const daysMap = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-    const todayIndex = new Date().getDay();
-    const todayName = daysMap[todayIndex];
+    const now = new Date();
+    const todayIndex = now.getDay();
 
-    const getClassesForDay = (dayName: string) => {
-      return schedule.filter(s => s.day === dayName).sort((a, b) => {
-        const periods: Record<string, number> = { 'Manhã': 1, 'Tarde': 2, 'Noite': 3 };
-        return (periods[a.period as string] || 0) - (periods[b.period as string] || 0);
-      });
+    // Helper to format date consistent with how topics store it
+    const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
+    const getTopicsForDate = (dateStr: string) => {
+      return topics
+        .filter(t => t.date === dateStr)
+        .sort((a, b) => {
+          const shiftOrder: Record<string, number> = { 'Manhã': 1, 'Tarde': 2, 'Noite': 3 };
+          return (shiftOrder[a.shift || ''] || 99) - (shiftOrder[b.shift || ''] || 99);
+        });
     };
 
-    let classes = getClassesForDay(todayName);
-    let isToday = true;
-    let label = `Aulas de Hoje (${todayName})`;
-    let targetDate = new Date();
+    let targetDate = now;
+    let targetDateStr = formatDate(targetDate);
+    let classes = getTopicsForDate(targetDateStr);
+    let label = `Conteúdos de Hoje (${daysMap[todayIndex]})`;
 
-    // If no classes today, look for next days
+    // If no specific topics for today, look ahead up to 7 days
     if (classes.length === 0) {
       for (let i = 1; i <= 7; i++) {
-        const nextIndex = (todayIndex + i) % 7;
-        const nextDayName = daysMap[nextIndex];
-        const nextClasses = getClassesForDay(nextDayName);
-        if (nextClasses.length > 0) {
-          classes = nextClasses;
-          isToday = false;
-          label = `Próximas Aulas (${nextDayName})`;
+        const nextDate = new Date();
+        nextDate.setDate(now.getDate() + i);
+        const nextDateStr = formatDate(nextDate);
+        const nextTopics = getTopicsForDate(nextDateStr);
 
-          // Calculate date for this next day
-          const nextDate = new Date();
-          nextDate.setDate(nextDate.getDate() + i);
+        if (nextTopics.length > 0) {
+          classes = nextTopics;
           targetDate = nextDate;
+          targetDateStr = nextDateStr;
+          label = `Próximos Conteúdos (${daysMap[targetDate.getDay()]})`;
           break;
         }
       }
     }
 
-    // Format date as YYYY-MM-DD for matching
-    const formattedDate = targetDate.toLocaleDateString('pt-BR').split('/').reverse().join('-');
-
-    return { classes, isToday, label, date: formattedDate };
-  }, [schedule]);
+    return { classes, label, date: targetDateStr };
+  }, [topics]);
 
   return (
     <div className="space-y-8">
       {/* Today's Classes Card */}
       <div
-        onClick={() => setShowStudyPlan(true)}
-        className="flex-1 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[32px] p-8 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform shadow-2xl shadow-indigo-500/20 cursor-pointer"
+        className="flex-1 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[32px] p-8 text-white relative overflow-hidden group shadow-2xl shadow-indigo-500/20"
       >
         <div className="absolute top-0 right-0 p-32 bg-white/10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
 
@@ -233,52 +232,42 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div>
             <h3 className="text-2xl font-black mb-1">{todayClasses.label}</h3>
             <p className="text-indigo-100 font-medium text-sm">
-              {todayClasses.classes.length > 0 ? `${todayClasses.classes.length} atividades agendadas.` : 'Nenhuma aula prevista para os próximos dias.'}
+              {todayClasses.classes.length > 0
+                ? `${todayClasses.classes.length} conteúdos registrados para ${todayClasses.date === new Date().toISOString().split('T')[0] ? 'hoje' : 'este dia'}.`
+                : 'Nenhum conteúdo específico agendado para os próximos dias.'}
             </p>
           </div>
-          {todayClasses.classes.length > 0 && (
-            <button
-              onClick={() => setActiveTab('schedule')}
-              className="bg-white/20 hover:bg-white/30 backdrop-blur-md px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all"
-            >
-              Ver Horário Completo
-            </button>
-          )}
+          <button
+            onClick={() => setActiveTab('syllabus')}
+            className="bg-white/20 hover:bg-white/30 backdrop-blur-md px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all relative z-20"
+          >
+            Ver Ementa Completa
+          </button>
         </div>
 
         {todayClasses.classes.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8 relative z-10">
-            {todayClasses.classes.map(cls => {
-              const subject = subjects.find(s => s.id === cls.subjectId);
-
-              // Find topic for this specific date and subject
-              const todaysTopic = topics.find(t => t.subjectId === cls.subjectId && t.date === todayClasses.date);
+            {todayClasses.classes.map(topic => {
+              const subject = subjects.find(s => s.id === topic.subjectId);
 
               return (
-                <div key={cls.id} className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex items-center gap-4">
-                  <div className={`w-2 h-10 rounded-full ${subject ? 'bg-' + subject.color + '-400' : 'bg-slate-400'}`} style={{ backgroundColor: subject ? COLOR_MAP[subject.color] : '#cbd5e1' }}></div>
+                <div key={topic.id} className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex items-center gap-4 hover:bg-white/20 transition-all">
+                  <div className="w-2 h-10 rounded-full" style={{ backgroundColor: subject ? COLOR_MAP[subject.color] : '#cbd5e1' }}></div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-lg leading-tight truncate">{subject?.name || 'Disciplina'}</p>
                     <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-indigo-100 mt-1">
-                      <span>{todaysTopic?.shift || 'Sem turno informado'}</span>
-                      {cls.front && (
+                      <span className="bg-white/20 px-2 py-0.5 rounded-md">{topic.shift || 'Sem turno'}</span>
+                      {topic.front && (
                         <>
                           <span className="w-1 h-1 bg-white/40 rounded-full"></span>
-                          <span>{cls.front}</span>
+                          <span className="truncate">{topic.front}</span>
                         </>
                       )}
                     </div>
-                    {todaysTopic ? (
-                      <div className="mt-3 pt-3 border-t border-white/10">
-                        <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest mb-0.5">Conteúdo Previsto:</p>
-                        <p className="text-sm font-medium text-white leading-tight line-clamp-2">{todaysTopic.title}</p>
-                      </div>
-                    ) : (
-                      <div className="mt-3 pt-3 border-t border-white/10">
-                        <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest mb-0.5">Conteúdo Previsto:</p>
-                        <p className="text-sm font-medium text-white/50 italic leading-tight">Não há conteúdo registrado até o momento. Insira-o.</p>
-                      </div>
-                    )}
+                    <div className="mt-3 pt-3 border-t border-white/10">
+                      <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest mb-1">Assunto:</p>
+                      <p className="text-sm font-medium text-white leading-tight line-clamp-2">{topic.title}</p>
+                    </div>
                   </div>
                 </div>
               );
