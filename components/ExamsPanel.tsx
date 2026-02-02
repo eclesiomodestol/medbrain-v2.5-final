@@ -77,11 +77,6 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
     }
   };
 
-  const handleDelete = (examId: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta prova? Esta ação não pode ser desfeita.')) {
-      onDeleteExam(examId);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -157,8 +152,12 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
                       <button onClick={() => handleEdit(exam)} className="p-2.5 text-slate-200 hover:text-blue-600 hover:bg-blue-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all">
                         <Edit2 size={18} />
                       </button>
-                      <button onClick={() => handleDelete(exam.id)} className="p-2.5 text-slate-200 hover:text-red-600 hover:bg-red-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all">
-                        <Trash2 size={18} />
+                      <button
+                        onClick={() => onDeleteExam(exam.id)}
+                        className="p-2.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all active:scale-90 group/del"
+                        title="Excluir Prova"
+                      >
+                        <Trash2 size={18} className="group-hover/del:rotate-12 transition-transform" />
                       </button>
                     </>
                   )}

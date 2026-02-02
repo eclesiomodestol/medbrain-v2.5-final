@@ -19,7 +19,7 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('medbrain_user');
     return saved ? JSON.parse(saved) : null;
   });
-  const [deletingItem, setDeletingItem] = useState<{ id: string, type: 'schedule' | 'internship' | 'topic' | 'pdf' } | null>(null);
+  const [deletingItem, setDeletingItem] = useState<{ id: string, type: 'schedule' | 'internship' | 'topic' | 'pdf' | 'exam' | 'user' } | null>(null);
 
   const [users, setUsers] = useState<User[]>([]);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'syllabus' | 'exams' | 'estagio' | 'quiz' | 'users' | 'grades' | 'profile'>('dashboard');
@@ -304,20 +304,20 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteExam = async (examId: string) => {
-    // Optimistic Update - Remove from local state immediately
-    const previousExams = examsData;
-    setExamsData(prev => prev.filter(e => e.id !== examId));
-
+  const handleResetPassword = async (userId: string) => {
     try {
-      const { error } = await supabase.from('exams').delete().eq('id', examId);
+      const { error } = await supabase.from('users').update({ password: '12345' }).eq('id', userId);
       if (error) throw error;
+      alert("Senha redefinida para 12345 com sucesso!");
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, password: '12345' } : u));
     } catch (err: any) {
-      console.error("Erro ao excluir prova:", err);
-      alert("Erro ao excluir prova. Verifique sua conexão.");
-      // Rollback - restore previous state
-      setExamsData(previousExams);
+      console.error("Erro ao redefinir senha:", err);
+      alert("Erro ao redefinir senha.");
     }
+  };
+
+  const handleDeleteExam = (examId: string) => {
+    setDeletingItem({ id: examId, type: 'exam' });
   };
 
   const handleUpdateUser = async (userId: string, updates: Partial<User>) => {
@@ -438,6 +438,32 @@ const App: React.FC = () => {
         }
       } catch (err) {
         console.error("Erro de rede ao deletar:", err);
+      }
+    } else if (type === 'exam') {
+      const previousExams = examsData;
+      setExamsData(prev => prev.filter(e => e.id !== id));
+      try {
+        const { error } = await supabase.from('exams').delete().eq('id', id);
+        if (error) {
+          setExamsData(previousExams);
+          throw error;
+        }
+      } catch (err: any) {
+        console.error("Erro ao excluir prova:", err);
+        alert("Erro ao excluir prova.");
+      }
+    } else if (type === 'user') {
+      const previousUsers = users;
+      setUsers(prev => prev.filter(u => u.id !== id));
+      try {
+        const { error } = await supabase.from('users').delete().eq('id', id);
+        if (error) {
+          setUsers(previousUsers);
+          throw error;
+        }
+      } catch (err: any) {
+        console.error("Erro ao excluir usuário:", err);
+        alert("Erro ao excluir usuário.");
       }
     } else if (type === 'pdf') {
       const topic = topics.find(t => t.id === id);
@@ -732,7 +758,15 @@ const App: React.FC = () => {
             />
           )}
           {activeTab === 'grades' && <GradesPanel subjects={subjectsState} grades={grades} onUpdate={handleUpdateGrades} />}
-          {activeTab === 'users' && <UserManagement users={users} subjects={subjectsState} onUpdateUser={handleUpdateUser} />}
+          {activeTab === 'users' && (
+            <UserManagement
+              users={users}
+              subjects={subjectsState}
+              onUpdateUser={handleUpdateUser}
+              onResetPassword={handleResetPassword}
+              onDeleteUser={(id) => setDeletingItem({ id, type: 'user' })}
+            />
+          )}
         </div>
       </main>
       {/* Custom Delete Confirmation Modal */}
@@ -741,7 +775,12 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full animate-in zoom-in-95 duration-200">
             <h3 className="text-xl font-bold text-slate-900 mb-2">
-              {deletingItem.type === 'schedule' ? 'Remover Horário?' : deletingItem.type === 'internship' ? 'Remover Estágio?' : deletingItem.type === 'topic' ? 'Remover Conteúdo?' : 'Remover PDF?'}
+              {deletingItem.type === 'schedule' ? 'Remover Horário?'
+                : deletingItem.type === 'internship' ? 'Remover Estágio?'
+                  : deletingItem.type === 'topic' ? 'Remover Conteúdo?'
+                    : deletingItem.type === 'exam' ? 'Excluir Prova?'
+                      : deletingItem.type === 'user' ? 'Deletar Usuário?'
+                        : 'Remover PDF?'}
             </h3>
             <p className="text-slate-500 mb-8">
               {deletingItem.type === 'schedule'
@@ -750,7 +789,11 @@ const App: React.FC = () => {
                   ? 'Tem certeza que deseja remover este estágio e todo seu histórico? Esta ação não pode ser desfeita.'
                   : deletingItem.type === 'topic'
                     ? 'Tem certeza que deseja excluir ESTE CONTEÚDO e todos os arquivos associados? Esta ação é irreversível.'
-                    : 'Tem certeza que deseja remover O ARQUIVO PDF anexado a este conteúdo?'}
+                    : deletingItem.type === 'exam'
+                      ? 'Tem certeza que deseja excluir esta prova e todo o plano de estudo associado?'
+                      : deletingItem.type === 'user'
+                        ? 'Tem certeza que deseja DELETAR este usuário PERMANENTEMENTE? Ele perderá todo o acesso ao sistema.'
+                        : 'Tem certeza que deseja remover O ARQUIVO PDF anexado a este conteúdo?'}
             </p>
             <div className="flex gap-3">
               <button
