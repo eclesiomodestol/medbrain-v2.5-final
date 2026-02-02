@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
 import { ScheduleEntry, Period, Subject } from '../types';
-import { Edit2, X, Plus, Trash2, Check } from 'lucide-react';
+import { Edit2, X, Plus, Trash2, Check, Download } from 'lucide-react';
+import { generateSchedulePDF } from '../utils/pdfGenerator';
 
 interface ScheduleProps {
   schedule: ScheduleEntry[];
@@ -159,6 +160,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ schedule, subjects, onUpdate
           </div>
         </div>
       )}
+
+      <div className="flex justify-between items-center p-6 bg-slate-50/50">
+        <h2 className="text-xl font-black text-slate-900 uppercase tracking-widest">Matriz Semanal</h2>
+        <button
+          onClick={() => generateSchedulePDF(schedule, subjects)}
+          className="flex items-center gap-2 bg-white border border-slate-200 hover:border-blue-500 hover:text-blue-600 px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm active:scale-95"
+        >
+          <Download size={16} />
+          Exportar PDF
+        </button>
+      </div>
 
       <div className="grid grid-cols-6 border-b border-slate-100">
         <div className="p-4 bg-slate-50/50 border-r border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center">Hora</div>

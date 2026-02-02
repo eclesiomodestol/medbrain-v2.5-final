@@ -1,147 +1,69 @@
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { ScheduleEntry, Subject, Period } from '../types';
 
-import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib';
-import { User } from '../types';
-
-export const addWatermarkToPdf = async (pdfUrl: string, user: User): Promise<Uint8Array | null> => {
-    try {
-        const existingPdfBytes = await fetch(pdfUrl).then(res => res.arrayBuffer());
-        const pdfDoc = await PDFDocument.load(existingPdfBytes);
-        const helveticaFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        const pages = pdfDoc.getPages();
-
-        const watermarkText = `${user.name} • ${user.email} • ${new Date().toLocaleDateString()}`;
-
-        pages.forEach(page => {
-            const { width, height } = page.getSize();
-            page.drawText(watermarkText, {
-                x: 50,
-                y: height / 2,
-                size: 24,
-                font: helveticaFont,
-                color: rgb(0.5, 0.5, 0.5),
-                rotate: degrees(45),
-                opacity: 0.3,
-            });
-            // Add a bottom secure footer too
-            page.drawText(`Documento rastreado por MedBrain • ${user.email}`, {
-                x: 20,
-                y: 20,
-                size: 8,
-                font: helveticaFont,
-                color: rgb(0.2, 0.2, 0.2),
-                opacity: 0.5
-            });
-        });
-
-        return await pdfDoc.save();
-    } catch (error) {
-        console.error("Error watermarking PDF:", error);
-        return null;
-    }
-};
-
-export const generateSummaryPdf = async (title: string, summary: string, user: User): Promise<Uint8Array> => {
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage();
-    const { width, height } = page.getSize();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-    let y = height - 50;
-    const margin = 50;
-    const maxWidth = width - (margin * 2);
-    const lineHeight = 15;
-
-    // Draw Title
-    page.drawText(title, { x: margin, y, size: 20, font: boldFont, color: rgb(0.1, 0.3, 0.7) });
-    y -= 40;
-
-    // Draw Watermark on first page
-    const watermarkText = `${user.name} • ${user.email}`;
-    page.drawText(watermarkText, {
-        x: 50,
-        y: height / 2,
-        size: 30,
-        font: boldFont,
-        color: rgb(0.7, 0.7, 0.7),
-        rotate: degrees(45),
-        opacity: 0.2,
+export const generateSchedulePDF = (schedule: ScheduleEntry[], subjects: Subject[]) => {
+    const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
     });
 
-    // Simple text wrapping logic
-    const lines = summary.split('\n');
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text('MedBrain EM - Horário Acadêmico', 14, 20);
 
-    // Create a new page function
-    let currentPage = page;
-    const addNewPage = () => {
-        currentPage = pdfDoc.addPage();
-        y = height - 50;
-        // Watermark on new page
-        currentPage.drawText(watermarkText, {
-            x: 50,
-            y: height / 2,
-            size: 30,
-            font: boldFont,
-            color: rgb(0.7, 0.7, 0.7),
-            rotate: degrees(45),
-            opacity: 0.2,
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139); // slate-400
+    doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 14, 28);
+
+    const daysLabels = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
+    const periods: Period[] = ['Manhã', 'Tarde', 'Noite'];
+
+    const tableRows: any[] = [];
+
+    periods.forEach(period => {
+        const row = [period as string];
+        daysLabels.forEach(day => {
+            const entries = schedule.filter(s => s.day === day && s.period === period);
+            const content = entries.map(entry => {
+                const subject = subjects.find(sub => sub.id === entry.subjectId);
+                const front = entry.front ? ` (${entry.front})` : '';
+                return `${subject?.name || '---'}${front}`;
+            }).join('\n\n');
+            row.push(content || '');
         });
-    };
+        tableRows.push(row);
+    });
 
-    for (const line of lines) {
-        if (y < 50) addNewPage();
-
-        const text = line.trim();
-        if (!text) {
-            y -= 10;
-            continue;
-        }
-
-        let fontSize = 10;
-        let currentFont = font;
-        let color = rgb(0, 0, 0);
-
-        // Simple Markdown-ish parsing
-        if (text.startsWith('# ')) {
-            fontSize = 18;
-            currentFont = boldFont;
-            y -= 20; // Extra spacing
-        } else if (text.startsWith('## ')) {
-            fontSize = 14;
-            currentFont = boldFont;
-            y -= 10;
-        } else if (text.startsWith('### ')) {
-            fontSize = 12;
-            currentFont = boldFont;
-        }
-
-        // Remove markdown chars for display
-        const cleanText = text.replace(/#/g, '').trim().replace(/\*\*/g, '');
-
-        // Wrap text
-        // We estimate char width ~ font_size * 0.5 (rough)
-        const allowedChars = Math.floor(maxWidth / (fontSize * 0.5));
-
-        // Split into words
-        const words = cleanText.split(' ');
-        let currentLine = '';
-
-        for (const word of words) {
-            if ((currentLine + word).length > allowedChars) {
-                currentPage.drawText(currentLine, { x: margin, y, size: fontSize, font: currentFont, color });
-                y -= lineHeight;
-                if (y < 50) addNewPage();
-                currentLine = word + ' ';
-            } else {
-                currentLine += word + ' ';
+    autoTable(doc, {
+        startY: 35,
+        head: [['Período', ...daysLabels]],
+        body: tableRows,
+        theme: 'grid',
+        headStyles: {
+            fillColor: [15, 23, 42],
+            textColor: [255, 255, 255],
+            fontSize: 10,
+            fontStyle: 'bold',
+            halign: 'center'
+        },
+        styles: {
+            fontSize: 9,
+            cellPadding: 6,
+            lineColor: [226, 232, 240], // slate-200
+            valign: 'middle'
+        },
+        columnStyles: {
+            0: { fontStyle: 'bold', fillColor: [248, 250, 252], halign: 'center' }
+        },
+        didParseCell: (data) => {
+            if (data.section === 'body' && data.column.index > 0) {
+                // Adjust row height if needed, jspdf-autotable handles it mostly
             }
         }
-        if (currentLine) {
-            currentPage.drawText(currentLine, { x: margin, y, size: fontSize, font: currentFont, color });
-            y -= lineHeight;
-        }
-        y -= 5; // Paragraph spacing
-    }
+    });
 
-    return await pdfDoc.save();
+    doc.save('MedBrain_Horario.pdf');
 };
