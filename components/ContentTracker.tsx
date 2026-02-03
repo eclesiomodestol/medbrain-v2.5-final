@@ -55,9 +55,11 @@ const classifySpecialty = (title: string, subjectId: string): string | undefined
   const mapping = SPECIALTY_MAP[subjectId];
   if (!mapping) return undefined;
 
-  const titleLower = title.toLowerCase();
+  const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const normalizedTitle = normalize(title);
+
   for (const [specialty, keywords] of Object.entries(mapping.keywordMap)) {
-    if (keywords.some(k => titleLower.includes(k.toLowerCase()))) {
+    if (keywords.some(k => normalizedTitle.includes(normalize(k)))) {
       return specialty;
     }
   }

@@ -81,12 +81,14 @@ const App: React.FC = () => {
           let title = e.title;
           let time = '';
           let shift = '';
+          let associatedTag = ExamTag.NONE;
           try {
             if (title && title.startsWith('{')) {
               const p = JSON.parse(title);
               title = p.text || title;
               time = p.time || '';
               shift = p.shift || '';
+              associatedTag = p.associatedTag || ExamTag.NONE;
             }
           } catch (err) { /* fallback to raw title */ }
           return {
@@ -94,7 +96,8 @@ const App: React.FC = () => {
             subjectId: e.subject_id,
             title,
             time,
-            shift
+            shift,
+            associatedTag
           };
         }));
       }
@@ -285,7 +288,8 @@ const App: React.FC = () => {
       const packedTitle = JSON.stringify({
         text: exam.title,
         time: exam.time,
-        shift: exam.shift
+        shift: exam.shift,
+        associatedTag: exam.associatedTag
       });
 
       const dbPayload = {
@@ -567,14 +571,26 @@ const App: React.FC = () => {
               onUpdateStatus={handleUpdateContentStatus}
               onUpdateTopic={async (updated) => {
                 setTopics(prev => prev.map(t => t.id === updated.id ? updated : t));
-                await supabase.from('topics').update({
+                const payload = {
                   title: updated.title,
                   subject_id: updated.subjectId,
                   date: updated.date,
                   shift: updated.shift,
                   tag: updated.tag,
                   front: updated.front
-                }).eq('id', updated.id);
+                };
+
+                let { error } = await supabase.from('topics').update(payload).eq('id', updated.id);
+
+                // Fallback if column 'shift' doesn't exist yet
+                if (error && (error as any).code === '42703') {
+                  const safePayload = { ...payload };
+                  delete (safePayload as any).shift;
+                  const { error: retryError } = await supabase.from('topics').update(safePayload).eq('id', updated.id);
+                  if (retryError) console.error("Update error after retry:", retryError);
+                } else if (error) {
+                  console.error("Update error:", error);
+                }
               }}
               onUploadPDF_New={uploadPDF}
               onDeletePDF={deletePDF}
@@ -582,7 +598,7 @@ const App: React.FC = () => {
                 setTopics(prev => [...prev, newTopic]);
                 try {
                   const dbPayload = {
-                    id: newTopic.id, // Assuming ID is generated safely or we let DB gen it (but we passed it here)
+                    id: newTopic.id,
                     title: newTopic.title,
                     subject_id: newTopic.subjectId,
                     date: newTopic.date,
@@ -592,9 +608,22 @@ const App: React.FC = () => {
                     status: ContentStatus.PENDENTE,
                     has_media: false
                   };
-                  const { error } = await supabase.from('topics').insert(dbPayload);
-                  if (error) console.error("Unset error:", error);
-                } catch (e) { console.error(e); }
+
+                  let { error } = await supabase.from('topics').insert(dbPayload);
+
+                  // Fallback if column 'shift' doesn't exist yet
+                  if (error && (error as any).code === '42703') {
+                    const safePayload = { ...dbPayload };
+                    delete (safePayload as any).shift;
+                    const { error: retryError } = await supabase.from('topics').insert(safePayload);
+                    if (retryError) console.error("Insert error after retry:", retryError);
+                  } else if (error) {
+                    console.error("Unset error:", error);
+                  }
+
+                } catch (e) {
+                  console.error(e);
+                }
               }}
               onUploadPDF={() => { }}
               onDeleteTopic={handleDeleteTopic}
