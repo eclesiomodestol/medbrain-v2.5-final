@@ -758,13 +758,13 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
               onChange={e => setNewTopicForm({ ...newTopicForm, title: e.target.value })}
             />
             <select
-              className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
+              className="col-span-12 md:col-span-4 lg:col-span-2 p-3 lg:p-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-blue-500 transition-all cursor-pointer text-sm lg:text-base"
               value={newTopicForm.subjectId}
               onChange={(e) => setNewTopicForm({ ...newTopicForm, subjectId: e.target.value })}
             >
-              <option value="" disabled>Selecione a Disciplina</option>
+              <option value="" disabled className="text-slate-900">Selecione a Disciplina</option>
               {virtualSubjects.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+                <option key={s.id} value={s.id} className="text-slate-900">{s.name}</option>
               ))}
             </select>
             <input
