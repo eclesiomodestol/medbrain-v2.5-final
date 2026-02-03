@@ -130,11 +130,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [tagFilter, setTagFilter] = useState<ExamTag | 'all'>('all');
 
   const filteredTopicsList = useMemo(() => {
-    return topics.filter(t => {
-      const matchSubject = subjectFilter === 'all' || t.subjectId === subjectFilter;
-      const matchTag = tagFilter === 'all' || t.tag === tagFilter;
-      return matchSubject && matchTag;
-    });
+    return topics
+      .filter(t => {
+        const matchSubject = subjectFilter === 'all' || t.subjectId === subjectFilter;
+        const matchTag = tagFilter === 'all' || t.tag === tagFilter;
+        return matchSubject && matchTag;
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [topics, subjectFilter, tagFilter]);
 
   const getDistribution = (topicList: Topic[]): Segment[] => {
@@ -321,6 +323,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <option value="all">Todo o Período</option>
             <option value={ExamTag.PR1}>Foco PR1 (Conteúdo Inicial)</option>
             <option value={ExamTag.PR2}>Foco PR2 (Conteúdo Avançado)</option>
+            <option value={ExamTag.SUB}>Segunda Chamada</option>
+            <option value={ExamTag.FINAL}>Prova Final</option>
           </select>
         </div>
 

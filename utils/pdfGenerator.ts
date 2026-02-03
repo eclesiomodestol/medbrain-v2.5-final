@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ScheduleEntry, Subject, Period } from '../types';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { ScheduleEntry, Subject, Period, User } from '../types';
 
 export const generateSchedulePDF = (schedule: ScheduleEntry[], subjects: Subject[]) => {
     const doc = new jsPDF({
@@ -57,13 +58,68 @@ export const generateSchedulePDF = (schedule: ScheduleEntry[], subjects: Subject
         },
         columnStyles: {
             0: { fontStyle: 'bold', fillColor: [248, 250, 252], halign: 'center' }
-        },
-        didParseCell: (data) => {
-            if (data.section === 'body' && data.column.index > 0) {
-                // Adjust row height if needed, jspdf-autotable handles it mostly
-            }
         }
     });
 
     doc.save('MedBrain_Horario.pdf');
+};
+
+export const generateSummaryPdf = async (title: string, summary: string, user: User) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Background Header
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageWidth, 40, 'F');
+
+    // Title
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title.toUpperCase(), 15, 20);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`ANÁLISE ESTRUTURADA MEDBRAIN • USUÁRIO: ${user.name.toUpperCase()}`, 15, 30);
+
+    // Body Text
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(11);
+
+    const lines = doc.splitTextToSize(summary, pageWidth - 30);
+    doc.text(lines, 15, 50);
+
+    // Footer Watermark on first page
+    doc.setTextColor(226, 232, 240);
+    doc.setFontSize(60);
+    doc.saveGraphicsState();
+    doc.setGState(new (doc as any).GState({ opacity: 0.1 }));
+    doc.text(user.name, pageWidth / 2, 150, { align: 'center', angle: 45 });
+    doc.restoreGraphicsState();
+
+    return new Uint8Array(doc.output('arraybuffer'));
+};
+
+export const addWatermarkToPdf = async (pdfUrl: string, user: User) => {
+    const response = await fetch(pdfUrl);
+    const existingPdfBytes = await response.arrayBuffer();
+
+    const pdfDoc = await PDFDocument.load(existingPdfBytes);
+    const pages = pdfDoc.getPages();
+    const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    for (const page of pages) {
+        const { width, height } = page.getSize();
+        page.drawText(user.name, {
+            x: width / 4,
+            y: height / 2,
+            size: 50,
+            font: font,
+            color: rgb(0.7, 0.7, 0.7),
+            opacity: 0.2,
+            rotate: { type: 'degrees', angle: 45 },
+        });
+    }
+
+    return await pdfDoc.save();
 };

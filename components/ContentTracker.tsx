@@ -32,6 +32,38 @@ const COLOR_MAP: Record<string, string> = {
 
 import { addWatermarkToPdf, generateSummaryPdf } from '../utils/pdfGenerator';
 
+const SPECIALTY_MAP: Record<string, { specialties: string[], keywordMap: Record<string, string[]> }> = {
+  cm3: {
+    specialties: ['Neurologia', 'Hematologia', 'Dermatologia'],
+    keywordMap: {
+      'Neurologia': ['Ecefálico', 'Cefaleia', 'Enxaqueca', 'Neuro', 'AVC', 'AVE', 'Epilepsia', 'Meningite'],
+      'Hematologia': ['Anemia', 'Pancitopenia', 'Hemato', 'Leucemia', 'Linfoma', 'Coagulação'],
+      'Dermatologia': ['Micoses', 'Dermato', 'Pele', 'Psoríase', 'Eczema', 'Hanseníase']
+    }
+  },
+  cc3: {
+    specialties: ['Otorrino', 'Ortopedia', 'Oftalmo'],
+    keywordMap: {
+      'Otorrino': ['Otorrino', 'Sinusite', 'Rinite', 'Otite', 'Laringe', 'Amigdalite'],
+      'Ortopedia': ['Fraturas', 'Ortopedia', 'Osso', 'Articulação', 'Coluna', 'Luxação'],
+      'Oftalmo': ['Glaucoma', 'Catarata', 'Oftalmo', 'Olho', 'Retina', 'Conjuntivite']
+    }
+  }
+};
+
+const classifySpecialty = (title: string, subjectId: string): string | undefined => {
+  const mapping = SPECIALTY_MAP[subjectId];
+  if (!mapping) return undefined;
+
+  const titleLower = title.toLowerCase();
+  for (const [specialty, keywords] of Object.entries(mapping.keywordMap)) {
+    if (keywords.some(k => titleLower.includes(k.toLowerCase()))) {
+      return specialty;
+    }
+  }
+  return undefined;
+};
+
 const SafeViewer = ({ topic, user, type, onClose }: { topic: Topic, user: User, type: 'summary' | 'pdf', onClose: () => void }) => {
   const pdfUrlWithCache = topic.pdfUrl ? `${topic.pdfUrl}?t=${Date.now()}` : '';
   const isAdmin = user.role === 'admin';
@@ -276,12 +308,43 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
   onDeleteTopic,
   onSaveQuiz
 }) => {
+  const virtualSubjects = useMemo(() => {
+    const list: { id: string, name: string, parentId: string, specialty?: string }[] = [];
+    subjects.forEach(s => {
+      const mapping = SPECIALTY_MAP[s.id];
+      if (mapping) {
+        mapping.specialties.forEach(spec => {
+          list.push({ id: `${s.id}_${spec}`, name: `${spec} (${s.name})`, parentId: s.id, specialty: spec });
+        });
+      } else {
+        list.push({ id: s.id, name: s.name, parentId: s.id });
+      }
+    });
+    return list;
+  }, [subjects]);
+
+  const isAdmin = currentUser.role === 'admin';
+
+  useEffect(() => {
+    // Auto-classify topics that don't have a front set
+    const needsClassification = topics.some(t => (t.subjectId === 'cm3' || t.subjectId === 'cc3') && !t.front);
+    if (needsClassification && isAdmin) {
+      topics.forEach(t => {
+        if ((t.subjectId === 'cm3' || t.subjectId === 'cc3') && !t.front) {
+          const specialty = classifySpecialty(t.title, t.subjectId);
+          if (specialty) {
+            onUpdateTopic({ ...t, front: specialty });
+          }
+        }
+      });
+    }
+  }, [topics, isAdmin, onUpdateTopic]);
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<ExamTag[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<ContentStatus[]>([]);
-  const [sortConfig, setSortConfig] = useState<{ key: 'date' | 'status' | 'subject' | 'title', direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: 'date' | 'status' | 'subject' | 'title', direction: 'asc' | 'desc' } | null>({ key: 'date', direction: 'asc' });
 
   // Filter Dropdowns State
   const [showSubjectFilter, setShowSubjectFilter] = useState(false);
@@ -303,7 +366,7 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
     title: '', subjectId: subjects[0]?.id || '', date: '', tag: ExamTag.NONE
   });
 
-  const isAdmin = currentUser.role === 'admin';
+
 
   // Sort Handler
   const handleSort = (key: 'date' | 'status' | 'subject' | 'title') => {
@@ -426,18 +489,21 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
 
   const handleCreateTopic = () => {
     if (newTopicForm.title && newTopicForm.subjectId) {
+      const virtualSub = virtualSubjects.find(vs => vs.id === newTopicForm.subjectId);
       const newTopic: Topic = {
-        id: Math.random().toString(36).substr(2, 9), // Temp ID, should be handled/ignored by DB gen if possible or this used
+        id: Math.random().toString(36).substr(2, 9), // Temp ID
         title: newTopicForm.title,
-        subjectId: newTopicForm.subjectId,
+        subjectId: virtualSub?.parentId || newTopicForm.subjectId,
+        front: virtualSub?.specialty || classifySpecialty(newTopicForm.title, virtualSub?.parentId || newTopicForm.subjectId),
         date: newTopicForm.date || new Date().toISOString().split('T')[0],
         tag: newTopicForm.tag || ExamTag.NONE,
+        shift: (newTopicForm.shift as any) || undefined,
         status: ContentStatus.PENDENTE,
         hasMedia: false
       };
       onAddTopic(newTopic);
       setIsAdding(false);
-      setNewTopicForm({ title: '', subjectId: subjects[0]?.id || '', date: '', tag: ExamTag.NONE });
+      setNewTopicForm({ title: '', subjectId: subjects[0]?.id || '', date: '', tag: ExamTag.NONE, shift: '' as any });
     } else {
       alert("Preencha título e disciplina!");
     }
@@ -657,45 +723,48 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
           <h3 className="text-lg font-black uppercase tracking-widest mb-6 flex items-center gap-2">
             <Sparkles className="text-blue-400" size={20} /> Novo Conteúdo
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-6">
             <input
               placeholder="Título do Conteúdo"
-              className="md:col-span-2 p-4 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 font-bold outline-none focus:border-blue-500 transition-colors"
+              className="col-span-12 md:col-span-8 lg:col-span-4 p-3 lg:p-4 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 font-bold outline-none focus:border-blue-500 transition-all shadow-inner text-sm lg:text-base"
               value={newTopicForm.title}
               onChange={e => setNewTopicForm({ ...newTopicForm, title: e.target.value })}
             />
             <select
-              className="p-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-blue-500"
+              className="col-span-12 md:col-span-4 lg:col-span-2 p-3 lg:p-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-blue-500 transition-all cursor-pointer text-sm lg:text-base"
               value={newTopicForm.subjectId}
               onChange={e => setNewTopicForm({ ...newTopicForm, subjectId: e.target.value })}
             >
-              {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              <option value="" disabled>Selecione a Disciplina</option>
+              {virtualSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <div className="flex gap-2">
-              <input
-                type="date"
-                className="flex-1 p-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-blue-500"
-                value={newTopicForm.date}
-                onChange={e => setNewTopicForm({ ...newTopicForm, date: e.target.value })}
-              />
-              <select
-                className="w-32 p-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-blue-500"
-                value={newTopicForm.shift || ''}
-                onChange={e => setNewTopicForm({ ...newTopicForm, shift: e.target.value as any })}
-              >
-                <option value="">Turno</option>
-                <option value="Manhã">Manhã</option>
-                <option value="Tarde">Tarde</option>
-                <option value="Noite">Noite</option>
-              </select>
-              <select
-                className="w-24 p-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-blue-500"
-                value={newTopicForm.tag}
-                onChange={e => setNewTopicForm({ ...newTopicForm, tag: e.target.value as ExamTag })}
-              >
-                {Object.values(ExamTag).map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+            <input
+              type="date"
+              className="col-span-12 md:col-span-4 lg:col-span-2 p-3 lg:p-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-blue-500 transition-all text-sm lg:text-base"
+              value={newTopicForm.date}
+              onChange={e => setNewTopicForm({ ...newTopicForm, date: e.target.value })}
+            />
+            <select
+              className="col-span-12 md:col-span-4 lg:col-span-2 p-3 lg:p-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-blue-500 transition-all cursor-pointer text-sm lg:text-base"
+              value={newTopicForm.shift || ''}
+              onChange={e => setNewTopicForm({ ...newTopicForm, shift: e.target.value as any })}
+            >
+              <option value="">Turno</option>
+              <option value="Manhã">Manhã</option>
+              <option value="Tarde">Tarde</option>
+              <option value="Noite">Noite</option>
+            </select>
+            <select
+              className="col-span-12 md:col-span-4 lg:col-span-2 p-3 lg:p-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-blue-500 transition-all cursor-pointer text-sm lg:text-base"
+              value={newTopicForm.tag}
+              onChange={e => setNewTopicForm({ ...newTopicForm, tag: e.target.value as ExamTag })}
+            >
+              <option value={ExamTag.NONE}>Vínculo Avaliação</option>
+              <option value={ExamTag.PR1}>PR1</option>
+              <option value={ExamTag.PR2}>PR2</option>
+              <option value={ExamTag.SUB}>Segunda Chamada</option>
+              <option value={ExamTag.FINAL}>Prova Final</option>
+            </select>
           </div>
           <div className="flex justify-end gap-3">
             <button onClick={() => setIsAdding(false)} className="px-6 py-3 rounded-xl hover:bg-white/10 font-bold text-xs uppercase tracking-widest">Cancelar</button>
@@ -791,12 +860,18 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
                         value={editForm.tag}
                         onChange={e => setEditForm({ ...editForm, tag: e.target.value as ExamTag })}
                       >
-                        {Object.values(ExamTag).map(t => <option key={t} value={t}>{t}</option>)}
+                        <option value={ExamTag.NONE}>Nenhuma</option>
+                        <option value={ExamTag.PR1}>PR1</option>
+                        <option value={ExamTag.PR2}>PR2</option>
+                        <option value={ExamTag.SUB}>Segunda Chamada</option>
+                        <option value={ExamTag.FINAL}>Prova Final</option>
                       </select>
                     ) : (
                       <span className={`inline-block px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${topic.tag === ExamTag.PR1 ? 'bg-amber-100 text-amber-700' :
                         topic.tag === ExamTag.PR2 ? 'bg-purple-100 text-purple-700' :
-                          'bg-slate-100 text-slate-400'
+                          topic.tag === ExamTag.SUB ? 'bg-rose-100 text-rose-700' :
+                            topic.tag === ExamTag.FINAL ? 'bg-indigo-100 text-indigo-700' :
+                              'bg-slate-100 text-slate-400'
                         }`}>
                         {topic.tag || '-'}
                       </span>
@@ -817,16 +892,25 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
                             />
                             <select
                               className="text-[10px] bg-transparent border-none text-slate-500 uppercase tracking-widest outline-none font-bold"
-                              value={editForm.subjectId}
-                              onChange={e => setEditForm({ ...editForm, subjectId: e.target.value })}
+                              value={virtualSubjects.find(vs => vs.parentId === editForm.subjectId && vs.specialty === editForm.front)?.id || editForm.subjectId}
+                              onChange={e => {
+                                const vs = virtualSubjects.find(v => v.id === e.target.value);
+                                setEditForm({ ...editForm, subjectId: vs?.parentId || e.target.value, front: vs?.specialty });
+                              }}
                             >
-                              {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                              {virtualSubjects.map(vs => (
+                                <option key={vs.id} value={vs.id}>
+                                  {vs.name}
+                                </option>
+                              ))}
                             </select>
                           </div>
                         ) : (
                           <>
                             <p className="font-bold text-slate-900 line-clamp-1">{topic.title}</p>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{subject?.name}</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              {topic.front ? `${topic.front} (${subject?.name})` : subject?.name}
+                            </p>
                           </>
                         )}
                       </div>

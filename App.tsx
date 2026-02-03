@@ -572,7 +572,8 @@ const App: React.FC = () => {
                   subject_id: updated.subjectId,
                   date: updated.date,
                   shift: updated.shift,
-                  tag: updated.tag
+                  tag: updated.tag,
+                  front: updated.front
                 }).eq('id', updated.id);
               }}
               onUploadPDF_New={uploadPDF}
@@ -587,6 +588,7 @@ const App: React.FC = () => {
                     date: newTopic.date,
                     shift: newTopic.shift,
                     tag: newTopic.tag,
+                    front: newTopic.front,
                     status: ContentStatus.PENDENTE,
                     has_media: false
                   };
