@@ -1,5 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { Schedule } from './components/Schedule';
@@ -27,6 +28,8 @@ const App: React.FC = () => {
   const [scheduleData, setScheduleData] = useState<ScheduleEntry[]>([]);
   const [examsData, setExamsData] = useState<Exam[]>([]);
   const [subjectsState, setSubjectsState] = useState<Subject[]>([]);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [internships, setInternships] = useState<Internship[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [quizHistory, setQuizHistory] = useState<Quiz[]>([]);
@@ -533,17 +536,32 @@ const App: React.FC = () => {
   if (!currentUser) return <Login onLogin={handleLogin} users={users} />;
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} />
-      <main className="flex-1 p-8 ml-64 overflow-y-auto bg-[#F3F4F6]">
+    <div className="flex min-h-screen bg-[#F3F4F6]">
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
+      <main className="flex-1 p-4 lg:p-8 lg:ml-64 overflow-y-auto">
         <header className="mb-8 flex items-center justify-between">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-black text-[#0F172A] tracking-tight capitalize">
-              {activeTab === 'exams' ? 'Calendário de Provas' : activeTab === 'syllabus' ? 'Ementa e Conteúdos' : activeTab === 'schedule' ? 'Horário Acadêmico' : activeTab.replace('-', ' ')}
-            </h1>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              MedBrain Engine v2.5 • Ciclo Clínico (7º Semestre)
-            </p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-200 rounded-xl transition-colors"
+            >
+              <Menu size={24} />
+            </button>
+            <div className="space-y-1">
+              <h1 className="text-3xl font-black text-[#0F172A] tracking-tight capitalize">
+                {activeTab === 'exams' ? 'Calendário de Provas' : activeTab === 'syllabus' ? 'Ementa e Conteúdos' : activeTab === 'schedule' ? 'Horário Acadêmico' : activeTab.replace('-', ' ')}
+              </h1>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                MedBrain Engine v2.5 • Ciclo Clínico (7º Semestre)
+              </p>
+            </div>
           </div>
         </header>
 

@@ -380,7 +380,6 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
     }
     setSortConfig({ key, direction });
   };
-
   const filteredTopics = useMemo(() => {
     let result = topics.filter(t => {
       // Search
@@ -433,6 +432,19 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
 
     return result;
   }, [topics, searchTerm, selectedSubjects, selectedTags, selectedStatus, sortConfig, subjects, studentProgress, isAdmin]);
+
+  const sortedTopics = useMemo(() => {
+    return [...filteredTopics].sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      if (dateA !== dateB) return dateA - dateB;
+
+      const shiftOrder: Record<string, number> = { 'Manhã': 1, 'Tarde': 2, 'Noite': 3 };
+      const orderA = shiftOrder[a.shift || ''] || 99;
+      const orderB = shiftOrder[b.shift || ''] || 99;
+      return orderA - orderB;
+    });
+  }, [filteredTopics]);
 
   const triggerUpload = (topicId: string) => {
     setActiveTopicId(topicId);
@@ -626,7 +638,7 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
             </button>
             {showSubjectFilter && (
               <div className="absolute top-12 left-0 w-64 bg-white rounded-xl shadow-xl border z-50 p-2 animate-in fade-in slide-in-from-top-2">
-                {subjects.map(s => (
+                {virtualSubjects.map(s => (
                   <button
                     key={s.id}
                     onClick={() => {
@@ -746,12 +758,14 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
               onChange={e => setNewTopicForm({ ...newTopicForm, title: e.target.value })}
             />
             <select
-              className="col-span-12 md:col-span-4 lg:col-span-2 p-3 lg:p-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-blue-500 transition-all cursor-pointer text-sm lg:text-base"
+              className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
               value={newTopicForm.subjectId}
-              onChange={e => setNewTopicForm({ ...newTopicForm, subjectId: e.target.value })}
+              onChange={(e) => setNewTopicForm({ ...newTopicForm, subjectId: e.target.value })}
             >
               <option value="" disabled>Selecione a Disciplina</option>
-              {virtualSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {virtualSubjects.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
             </select>
             <input
               type="date"

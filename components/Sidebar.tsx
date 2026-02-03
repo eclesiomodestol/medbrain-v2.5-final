@@ -8,9 +8,11 @@ interface SidebarProps {
   setActiveTab: (tab: any) => void;
   currentUser: UserType | null;
   onLogout: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, currentUser, onLogout }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, currentUser, onLogout, isOpen, onClose }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'schedule', label: 'Horário Acadêmico', icon: Calendar },
@@ -26,54 +28,63 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, curre
   }
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-64 bg-[#0F172A] text-white flex flex-col z-50">
-      <div className="p-6">
-        <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-          <span className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-sm">MB</span>
-          MedBrain <span className="text-blue-500">EM</span>
-        </h1>
-      </div>
+    <>
+      {/* Mobile Overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[45] lg:hidden"
+          onClick={onClose}
+        />
+      )}
 
-      <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-        {menuItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveTab(item.id)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === item.id
+      <aside className={`fixed left-0 top-0 bottom-0 w-64 bg-[#0F172A] text-white flex flex-col z-50 transition-transform duration-300 lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6">
+          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+            <span className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-sm">MB</span>
+            MedBrain <span className="text-blue-500">EM</span>
+          </h1>
+        </div>
+
+        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+          {menuItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => { setActiveTab(item.id); onClose(); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === item.id
                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-          >
-            <item.icon size={20} />
-            <span className="font-medium text-sm">{item.label}</span>
-          </button>
-        ))}
-      </nav>
+                }`}
+            >
+              <item.icon size={20} />
+              <span className="font-medium text-sm">{item.label}</span>
+            </button>
+          ))}
+        </nav>
 
-      <div className="p-6 border-t border-slate-800">
-        <div
-          onClick={() => setActiveTab('profile')}
-          className={`flex items-center gap-4 p-4 rounded-2xl cursor-pointer hover:bg-slate-800 transition-all group ${activeTab === 'profile' ? 'bg-slate-800' : ''}`}
-        >
-          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-lg overflow-hidden">
-            {currentUser?.avatar ? (
-              <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
-            ) : (
-              currentUser?.name?.charAt(0)
-            )}
+        <div className="p-6 border-t border-slate-800">
+          <div
+            onClick={() => setActiveTab('profile')}
+            className={`flex items-center gap-4 p-4 rounded-2xl cursor-pointer hover:bg-slate-800 transition-all group ${activeTab === 'profile' ? 'bg-slate-800' : ''}`}
+          >
+            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-lg overflow-hidden">
+              {currentUser?.avatar ? (
+                <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                currentUser?.name?.charAt(0)
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-white truncate group-hover:text-blue-400 transition-colors">{currentUser?.name || 'Visitante'}</p>
+              <p className="text-[10px] uppercase font-black tracking-wider text-slate-500">Editar Perfil</p>
+            </div>
+            <LogOut
+              size={18}
+              className="text-slate-500 hover:text-rose-500 transition-colors cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); onLogout(); }}
+            />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white truncate group-hover:text-blue-400 transition-colors">{currentUser?.name || 'Visitante'}</p>
-            <p className="text-[10px] uppercase font-black tracking-wider text-slate-500">Editar Perfil</p>
-          </div>
-          <LogOut
-            size={18}
-            className="text-slate-500 hover:text-rose-500 transition-colors cursor-pointer"
-            onClick={(e) => { e.stopPropagation(); onLogout(); }}
-            title="Sair"
-          />
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 };

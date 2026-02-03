@@ -117,6 +117,7 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   accessibleSubjects: string[] | 'all';
+  avatar?: string;
 }
 
 export interface StudentProgress {

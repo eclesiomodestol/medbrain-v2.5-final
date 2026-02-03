@@ -201,9 +201,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     let classes = getTopicsForDate(targetDateStr);
     let label = `Conteúdos de Hoje (${daysMap[todayIndex]})`;
 
-    // If no specific topics for today, look ahead up to 7 days
     if (classes.length === 0) {
-      for (let i = 1; i <= 7; i++) {
+      for (let i = 1; i <= 30; i++) {
         const nextDate = new Date();
         nextDate.setDate(now.getDate() + i);
         const nextDateStr = formatDate(nextDate);
@@ -219,7 +218,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
     }
 
-    return { classes, label, date: targetDateStr };
+    // Grouping classes by shift to avoid repetition in UI
+    const grouped = classes.reduce((acc, topic) => {
+      const shift = topic.shift || 'Sem turno';
+      if (!acc[shift]) acc[shift] = [];
+      acc[shift].push(topic);
+      return acc;
+    }, {} as Record<string, Topic[]>);
+
+    return { grouped, label, date: targetDateStr, totalCount: classes.length };
   }, [topics]);
 
   return (
@@ -234,8 +241,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div>
             <h3 className="text-2xl font-black mb-1">{todayClasses.label}</h3>
             <p className="text-indigo-100 font-medium text-sm">
-              {todayClasses.classes.length > 0
-                ? `${todayClasses.classes.length} conteúdos registrados para ${todayClasses.date === new Date().toISOString().split('T')[0] ? 'hoje' : 'este dia'}.`
+              {todayClasses.totalCount > 0
+                ? `${todayClasses.totalCount} conteúdos registrados para ${todayClasses.date === new Date().toISOString().split('T')[0] ? 'hoje' : 'este dia'}.`
                 : 'Nenhum conteúdo específico agendado para os próximos dias.'}
             </p>
           </div>
@@ -247,33 +254,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </button>
         </div>
 
-        {todayClasses.classes.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8 relative z-10">
-            {todayClasses.classes.map(topic => {
-              const subject = subjects.find(s => s.id === topic.subjectId);
-
-              return (
-                <div key={topic.id} className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex items-center gap-4 hover:bg-white/20 transition-all">
-                  <div className="w-2 h-10 rounded-full" style={{ backgroundColor: subject ? COLOR_MAP[subject.color] : '#cbd5e1' }}></div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-lg leading-tight truncate">{subject?.name || 'Disciplina'}</p>
-                    <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-indigo-100 mt-1">
-                      <span className="bg-white/20 px-2 py-0.5 rounded-md">{topic.shift || 'Sem turno'}</span>
-                      {topic.front && (
-                        <>
-                          <span className="w-1 h-1 bg-white/40 rounded-full"></span>
-                          <span className="truncate">{topic.front}</span>
-                        </>
-                      )}
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-white/10">
-                      <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest mb-1">Assunto:</p>
-                      <p className="text-sm font-medium text-white leading-tight line-clamp-2">{topic.title}</p>
-                    </div>
+        {todayClasses.totalCount > 0 && (
+          <div className="space-y-6 mt-8 relative z-10 font-[Inter]">
+            {Object.entries(todayClasses.grouped).map(([shift, shiftTopics]) => (
+              <div key={shift} className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-lg text-[10px] font-black uppercase tracking-[0.2em]">
+                    {shift}
                   </div>
+                  <div className="h-px bg-white/10 flex-1"></div>
                 </div>
-              );
-            })}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {shiftTopics.map(topic => {
+                    const subject = subjects.find(s => s.id === topic.subjectId);
+                    return (
+                      <div key={topic.id} className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex items-center gap-4 hover:bg-white/20 transition-all">
+                        <div className="w-2 h-10 rounded-full" style={{ backgroundColor: subject ? COLOR_MAP[subject.color] : '#cbd5e1' }}></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-lg leading-tight truncate">{subject?.name || 'Disciplina'}</p>
+                          {topic.front && <p className="text-[11px] font-black uppercase tracking-widest text-indigo-100 mt-1 truncate">{topic.front}</p>}
+                          <div className="mt-3 pt-3 border-t border-white/10">
+                            <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest mb-1">Assunto:</p>
+                            <p className="text-sm font-medium text-white leading-tight line-clamp-2">{topic.title}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
