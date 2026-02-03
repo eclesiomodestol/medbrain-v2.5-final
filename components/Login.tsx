@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { User } from '../types';
 import { Mail, Lock, LogIn, Sparkles, BrainCircuit, Loader2, Database, CheckCircle, UserPlus, ArrowLeft } from 'lucide-react';
 import { supabase } from '../supabase';
-import { initialUsers, subjects, initialTopics, initialSchedule, initialExams, initialInternships } from '../mockData';
+
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -18,8 +18,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [seedSuccess, setSeedSuccess] = useState(false);
 
   // Force cleanup of potential stale Supabase sessions that cause 400/406 errors
   React.useEffect(() => {
@@ -119,49 +117,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
   };
 
-  const seedDatabase = async () => {
-    setIsSeeding(true);
-    setError('');
-    try {
-      const dbUsers = initialUsers.map(({ accessibleSubjects, ...u }) => ({
-        ...u,
-        accessible_subjects: accessibleSubjects
-      }));
 
-      const dbTopics = initialTopics.map(({ subjectId, hasMedia, ...t }) => ({
-        ...t,
-        subject_id: subjectId,
-        has_media: hasMedia
-      }));
-
-      const dbSchedule = initialSchedule.map(({ subjectId, ...s }) => ({
-        ...s,
-        subject_id: subjectId
-      }));
-
-      const dbExams = initialExams.map(({ subjectId, ...e }) => ({
-        ...e,
-        subject_id: subjectId
-      }));
-
-      await Promise.all([
-        supabase.from('users').upsert(dbUsers),
-        supabase.from('subjects').upsert(subjects),
-        supabase.from('topics').upsert(dbTopics),
-        supabase.from('schedule').upsert(dbSchedule),
-        supabase.from('exams').upsert(dbExams),
-        supabase.from('internships').upsert(initialInternships)
-      ]);
-
-      setSeedSuccess(true);
-      setTimeout(() => setSeedSuccess(false), 5000);
-    } catch (err: any) {
-      console.error(err);
-      setError(`Erro ao inicializar: ${err.message}`);
-    } finally {
-      setIsSeeding(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-[#F3F4F6] flex items-center justify-center p-6">
@@ -269,19 +225,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               </div>
             </form>
 
-            <div className="mt-8 pt-6 border-t border-slate-50 flex flex-col items-center gap-4">
-              <button
-                onClick={seedDatabase}
-                disabled={isSeeding}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${seedSuccess
-                    ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                    : 'bg-white text-slate-300 border-slate-100 hover:border-slate-200 hover:text-slate-500'
-                  }`}
-              >
-                {isSeeding ? <Loader2 size={12} className="animate-spin" /> : seedSuccess ? <CheckCircle size={12} /> : <Database size={12} />}
-                {isSeeding ? 'Sincronizando...' : seedSuccess ? 'Banco Pronto!' : 'Setup de Admin'}
-              </button>
-            </div>
+
           </div>
 
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
