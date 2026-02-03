@@ -51,6 +51,8 @@ const SPECIALTY_MAP: Record<string, { specialties: string[], keywordMap: Record<
   }
 };
 
+const getTopicVirtualId = (t: Topic) => t.front ? `${t.subjectId}_${t.front}` : t.subjectId;
+
 const classifySpecialty = (title: string, subjectId: string): string | undefined => {
   const mapping = SPECIALTY_MAP[subjectId];
   if (!mapping) return undefined;
@@ -384,8 +386,10 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
       // Search
       const matchesSearch = t.title.toLowerCase().includes(searchTerm.toLowerCase());
 
-      // Subjects
-      const matchesSubject = selectedSubjects.length === 0 || selectedSubjects.includes(t.subjectId);
+      // Subjects (Handle Virtual IDs)
+      const matchesSubject = selectedSubjects.length === 0 ||
+        selectedSubjects.includes(t.subjectId) ||
+        selectedSubjects.includes(getTopicVirtualId(t));
 
       // Tags (PR1/PR2)
       const matchesTag = selectedTags.length === 0 || selectedTags.includes(t.tag);
@@ -479,12 +483,21 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
 
   const handleEditClick = (topic: Topic) => {
     setEditingId(topic.id);
-    setEditForm({ ...topic });
+    setEditForm({
+      ...topic,
+      subjectId: getTopicVirtualId(topic)
+    });
   };
 
   const handleSaveEdit = () => {
     if (editingId && editForm.title) {
-      onUpdateTopic(editForm as Topic);
+      const virtualSub = virtualSubjects.find(vs => vs.id === editForm.subjectId);
+      const updatedTopic: Topic = {
+        ...editForm as Topic,
+        subjectId: virtualSub?.parentId || editForm.subjectId!,
+        front: virtualSub?.specialty || editForm.front
+      };
+      onUpdateTopic(updatedTopic);
       setEditingId(null);
     }
   };

@@ -156,8 +156,9 @@ const App: React.FC = () => {
       if (prog) {
         setStudentProgress(prog);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao carregar dados:", error);
+      alert(`Erro ao sincronizar dados: ${error.message || 'Erro desconhecido'}`);
     }
   };
 
@@ -254,20 +255,18 @@ const App: React.FC = () => {
 
   const handleSaveQuiz = async (quiz: Quiz) => {
     try {
-      const dbPayload = {
+      const { error } = await supabase.from('quizzes').insert({
         id: quiz.id,
         user_id: currentUser?.id,
         title: quiz.title,
         questions: quiz.questions,
         created_at: quiz.createdAt
-      };
-
-      const { error } = await supabase.from('quizzes').insert(dbPayload);
+      });
       if (error) throw error;
-
+      setQuizzes(prev => [...prev, quiz]);
       setQuizHistory(prev => [quiz, ...prev]);
     } catch (err: any) {
-      console.error("Erro ao salvar simulado:", err);
+      alert(`Erro ao salvar simulado: ${err.message}`);
     }
   };
 
@@ -387,6 +386,7 @@ const App: React.FC = () => {
 
     } catch (err: any) {
       console.error("Error updating status:", err);
+      alert(`Erro ao atualizar status: ${err.message}`);
     }
   };
 
@@ -571,25 +571,31 @@ const App: React.FC = () => {
               onUpdateStatus={handleUpdateContentStatus}
               onUpdateTopic={async (updated) => {
                 setTopics(prev => prev.map(t => t.id === updated.id ? updated : t));
-                const payload = {
-                  title: updated.title,
-                  subject_id: updated.subjectId,
-                  date: updated.date,
-                  shift: updated.shift,
-                  tag: updated.tag,
-                  front: updated.front
-                };
+                try {
+                  const payload = {
+                    title: updated.title,
+                    subject_id: updated.subjectId,
+                    date: updated.date,
+                    shift: updated.shift,
+                    tag: updated.tag,
+                    front: updated.front
+                  };
 
-                let { error } = await supabase.from('topics').update(payload).eq('id', updated.id);
+                  let { error } = await supabase.from('topics').update(payload).eq('id', updated.id);
 
-                // Fallback if column 'shift' doesn't exist yet
-                if (error && (error as any).code === '42703') {
-                  const safePayload = { ...payload };
-                  delete (safePayload as any).shift;
-                  const { error: retryError } = await supabase.from('topics').update(safePayload).eq('id', updated.id);
-                  if (retryError) console.error("Update error after retry:", retryError);
-                } else if (error) {
-                  console.error("Update error:", error);
+                  // Fallback if column 'shift' doesn't exist yet
+                  if (error && (error as any).code === '42703') {
+                    const safePayload = { ...payload };
+                    delete (safePayload as any).shift;
+                    const { error: retryError } = await supabase.from('topics').update(safePayload).eq('id', updated.id);
+                    if (retryError) {
+                      alert(`Erro ao atualizar (retry): ${retryError.message}`);
+                    }
+                  } else if (error) {
+                    alert(`Erro ao atualizar: ${error.message}`);
+                  }
+                } catch (e: any) {
+                  alert(`Erro inesperado na atualização: ${e.message}`);
                 }
               }}
               onUploadPDF_New={uploadPDF}
@@ -616,13 +622,14 @@ const App: React.FC = () => {
                     const safePayload = { ...dbPayload };
                     delete (safePayload as any).shift;
                     const { error: retryError } = await supabase.from('topics').insert(safePayload);
-                    if (retryError) console.error("Insert error after retry:", retryError);
+                    if (retryError) {
+                      alert(`Erro ao criar conteúdo (retry): ${retryError.message}`);
+                    }
                   } else if (error) {
-                    console.error("Unset error:", error);
+                    alert(`Erro ao criar conteúdo: ${error.message}`);
                   }
-
-                } catch (e) {
-                  console.error(e);
+                } catch (e: any) {
+                  alert(`Erro inesperado na criação: ${e.message}`);
                 }
               }}
               onUploadPDF={() => { }}
