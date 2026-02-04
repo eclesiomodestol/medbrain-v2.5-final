@@ -187,6 +187,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     // Helper to format date consistent with how topics store it
     const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
+    // Helper to get day of week from date string (YYYY-MM-DD)
+    const getDayOfWeekFromDateString = (dateStr: string) => {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      // Create date in local timezone to avoid UTC offset issues
+      const date = new Date(year, month - 1, day);
+      return date.getDay();
+    };
+
     const getTopicsForDate = (dateStr: string) => {
       return topics
         .filter(t => t.date === dateStr)
@@ -212,7 +220,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           classes = nextTopics;
           targetDate = nextDate;
           targetDateStr = nextDateStr;
-          label = `Próximos Conteúdos (${daysMap[targetDate.getDay()]})`;
+          // Use the helper function to get correct day of week from the date string
+          const dayOfWeek = getDayOfWeekFromDateString(nextDateStr);
+          label = `Próximos Conteúdos (${daysMap[dayOfWeek]})`;
           break;
         }
       }
