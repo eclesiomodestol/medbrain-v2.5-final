@@ -619,7 +619,9 @@ const App: React.FC = () => {
               onUploadPDF_New={uploadPDF}
               onDeletePDF={deletePDF}
               onAddTopic={async (newTopic) => {
+                // Optimistic update
                 setTopics(prev => [...prev, newTopic]);
+
                 try {
                   const dbPayload = {
                     id: newTopic.id,
@@ -633,21 +635,96 @@ const App: React.FC = () => {
                     has_media: false
                   };
 
+                  console.log('Tentando inserir conteúdo:', dbPayload);
+
                   let { error } = await supabase.from('topics').insert(dbPayload);
 
                   // Fallback if column 'shift' doesn't exist yet
                   if (error && (error as any).code === '42703') {
+                    console.log('Coluna shift não existe, tentando sem ela...');
                     const safePayload = { ...dbPayload };
                     delete (safePayload as any).shift;
                     const { error: retryError } = await supabase.from('topics').insert(safePayload);
                     if (retryError) {
-                      alert(`Erro ao criar conteúdo (retry): ${retryError.message}`);
+                      console.error('Erro no retry:', retryError);
+                      throw new Error(`Erro ao criar conteúdo (retry): ${retryError.message}`);
                     }
                   } else if (error) {
-                    alert(`Erro ao criar conteúdo: ${error.message}`);
+                    console.error('Erro ao inserir:', error);
+                    throw new Error(`Erro ao criar conteúdo: ${error.message}`);
                   }
+
+                  console.log('Conteúdo criado com sucesso!');
                 } catch (e: any) {
-                  alert(`Erro inesperado na criação: ${e.message}`);
+                  console.error('Erro capturado:', e);
+                  // Rollback optimistic update
+                  setTopics(prev => prev.filter(t => t.id !== newTopic.id));
+
+                  // User-friendly error message
+                  if (e.message && e.message.includes('Failed to fetch')) {
+                    alert('Erro de conexão: Verifique sua internet e se o Supabase está configurado corretamente.');
+                  } else if (e.name === 'TypeError' && e.message.includes('Load failed')) {
+                    alert('Erro de conexão com o banco de dados. Verifique:\n1. Conexão com internet\n2. Configuração do Supabase (supabase.ts)\n3. CORS no projeto Supabase');
+                  } else {
+                    alert(`Erro ao criar conteúdo: ${e.message || 'Erro desconhecido'}`);
+                  }
+                }
+              }}
+              onBulkImport={async (newTopics) => {
+                // Optimistic update
+                setTopics(prev => [...prev, ...newTopics]);
+
+                try {
+                  const dbPayloads = newTopics.map(topic => ({
+                    id: topic.id,
+                    title: topic.title,
+                    subject_id: topic.subjectId,
+                    date: topic.date,
+                    shift: topic.shift,
+                    tag: topic.tag,
+                    front: topic.front,
+                    status: ContentStatus.PENDENTE,
+                    has_media: false
+                  }));
+
+                  console.log(`Tentando inserir ${dbPayloads.length} conteúdos em lote...`);
+
+                  let { error } = await supabase.from('topics').insert(dbPayloads);
+
+                  // Fallback if column 'shift' doesn't exist yet
+                  if (error && (error as any).code === '42703') {
+                    console.log('Coluna shift não existe, tentando sem ela...');
+                    const safePayloads = dbPayloads.map(p => {
+                      const safe = { ...p };
+                      delete (safe as any).shift;
+                      return safe;
+                    });
+                    const { error: retryError } = await supabase.from('topics').insert(safePayloads);
+                    if (retryError) {
+                      console.error('Erro no retry:', retryError);
+                      throw new Error(`Erro ao importar conteúdos (retry): ${retryError.message}`);
+                    }
+                  } else if (error) {
+                    console.error('Erro ao inserir em lote:', error);
+                    throw new Error(`Erro ao importar conteúdos: ${error.message}`);
+                  }
+
+                  console.log(`${dbPayloads.length} conteúdos importados com sucesso!`);
+                  alert(`✅ ${dbPayloads.length} conteúdos importados com sucesso!`);
+                } catch (e: any) {
+                  console.error('Erro capturado:', e);
+                  // Rollback optimistic update
+                  const newIds = newTopics.map(t => t.id);
+                  setTopics(prev => prev.filter(t => !newIds.includes(t.id)));
+
+                  // User-friendly error message
+                  if (e.message && e.message.includes('Failed to fetch')) {
+                    alert('Erro de conexão: Verifique sua internet e se o Supabase está configurado corretamente.');
+                  } else if (e.name === 'TypeError' && e.message.includes('Load failed')) {
+                    alert('Erro de conexão com o banco de dados. Verifique:\n1. Conexão com internet\n2. Configuração do Supabase (supabase.ts)\n3. CORS no projeto Supabase');
+                  } else {
+                    alert(`Erro ao importar conteúdos: ${e.message || 'Erro desconhecido'}`);
+                  }
                 }
               }}
               onUploadPDF={() => { }}

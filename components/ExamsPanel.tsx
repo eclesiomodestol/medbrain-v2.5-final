@@ -41,7 +41,39 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [exams, filterTag]);
 
-  const calculateProgress = (subjectId: string, examTitle: string, associatedTag?: ExamTag) => {
+  interface SubspecialtyProgress {
+    subspecialty: string;
+    total: number;
+    completed: number; // Resumido OU Revisado
+    percentage: number;
+  }
+
+  // Detectar subespecialidade pelo título da prova
+  const detectSubspecialtyFromTitle = (examTitle: string): string | null => {
+    const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const normalizedTitle = normalize(examTitle);
+
+    // Lista de subespecialidades conhecidas
+    const subspecialties = [
+      'Neurologia', 'Hematologia', 'Dermatologia', // CM3
+      'Otorrino', 'Ortopedia', 'Oftalmo', 'Oftalmologia' // CC3
+    ];
+
+    for (const sub of subspecialties) {
+      if (normalizedTitle.includes(normalize(sub))) {
+        // Normalizar "Oftalmo" e "Oftalmologia" para "Oftalmo"
+        return sub === 'Oftalmologia' ? 'Oftalmo' : sub;
+      }
+    }
+
+    return null;
+  };
+
+  const calculateProgressBySubspecialty = (
+    subjectId: string,
+    examTitle: string,
+    associatedTag?: ExamTag
+  ): { overall: number; breakdown: SubspecialtyProgress[]; targetSubspecialty: string | null } => {
     let targetTag = ExamTag.NONE;
 
     if (associatedTag && associatedTag !== ExamTag.NONE) {
@@ -51,18 +83,68 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
       targetTag = isPR1 ? ExamTag.PR1 : ExamTag.PR2;
     }
 
-    const relevantTopics = topics.filter(t => t.subjectId === subjectId && t.tag === targetTag);
-    if (relevantTopics.length === 0) return 0;
+    // Detectar subespecialidade do título da prova
+    const targetSubspecialty = detectSubspecialtyFromTitle(examTitle);
 
-    // Use student progress if available, else fallback to topic status
-    const revised = relevantTopics.filter(t => {
-      if (currentUser?.role === 'admin') return t.status === ContentStatus.REVISADO;
+    // Filtrar tópicos relevantes para a TAG da prova
+    let relevantTopics = topics.filter(t => t.subjectId === subjectId && t.tag === targetTag);
 
-      const prog = studentProgress?.find(p => p.topic_id === t.id);
-      return prog ? prog.status === ContentStatus.REVISADO : false; // Default to false (Pendente) if not found
-    }).length;
+    // Se a prova é de uma subespecialidade específica, filtrar apenas os tópicos dessa subespecialidade
+    if (targetSubspecialty) {
+      relevantTopics = relevantTopics.filter(t => t.front === targetSubspecialty);
+    }
 
-    return Math.round((revised / relevantTopics.length) * 100);
+    if (relevantTopics.length === 0) return { overall: 0, breakdown: [], targetSubspecialty };
+
+    // Agrupar por subespecialidade (front)
+    const bySubspecialty = new Map<string, Topic[]>();
+
+    relevantTopics.forEach(topic => {
+      const subspecialty = topic.front || 'Geral';
+      if (!bySubspecialty.has(subspecialty)) {
+        bySubspecialty.set(subspecialty, []);
+      }
+      bySubspecialty.get(subspecialty)!.push(topic);
+    });
+
+    // Calcular progresso por subespecialidade
+    const breakdown: SubspecialtyProgress[] = [];
+    let totalCompleted = 0;
+    let totalTopics = relevantTopics.length;
+
+    bySubspecialty.forEach((topicsInSubspecialty, subspecialty) => {
+      // Contar como completo se for Resumido OU Revisado
+      const completed = topicsInSubspecialty.filter(t => {
+        if (currentUser?.role === 'admin') {
+          return t.status === ContentStatus.RESUMIDO || t.status === ContentStatus.REVISADO;
+        }
+        const prog = studentProgress?.find(p => p.topic_id === t.id);
+        return prog?.status === ContentStatus.RESUMIDO || prog?.status === ContentStatus.REVISADO;
+      }).length;
+
+      totalCompleted += completed;
+
+      breakdown.push({
+        subspecialty,
+        total: topicsInSubspecialty.length,
+        completed,
+        percentage: Math.round((completed / topicsInSubspecialty.length) * 100)
+      });
+    });
+
+    // Ordenar por nome da subespecialidade
+    breakdown.sort((a, b) => a.subspecialty.localeCompare(b.subspecialty));
+
+    return {
+      overall: Math.round((totalCompleted / totalTopics) * 100),
+      breakdown,
+      targetSubspecialty
+    };
+  };
+
+  // Manter função legada para compatibilidade
+  const calculateProgress = (subjectId: string, examTitle: string, associatedTag?: ExamTag) => {
+    return calculateProgressBySubspecialty(subjectId, examTitle, associatedTag).overall;
   };
 
   const handleEdit = (exam: Exam) => {
@@ -103,7 +185,8 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {filteredExams.map((exam) => {
           const isEditing = editingId === exam.id;
-          const progress = calculateProgress(exam.subjectId, exam.title, exam.associatedTag);
+          const progressData = calculateProgressBySubspecialty(exam.subjectId, exam.title, exam.associatedTag);
+          const progress = progressData.overall;
           const subject = subjects.find(s => s.id === exam.subjectId);
 
           return (
@@ -235,6 +318,33 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
                     style={{ width: `${progress}%` }}
                   ></div>
                 </div>
+
+                {/* Breakdown por Subespecialidade */}
+                {progressData.breakdown.length > 1 && (
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                      📊 Progresso por Subespecialidade
+                    </span>
+                    {progressData.breakdown.map(sub => (
+                      <div key={sub.subspecialty} className="space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-slate-700">{sub.subspecialty}</span>
+                          <span className="text-xs font-black text-slate-900">{sub.percentage}%</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-500"
+                            style={{ width: `${sub.percentage}%` }}
+                          />
+                        </div>
+                        <div className="flex gap-3 text-[9px] text-slate-500 font-bold">
+                          <span className="flex items-center gap-1">✓ {sub.completed} Concluídos</span>
+                          <span className="flex items-center gap-1">📚 {sub.total} Total</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2 pt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   {progress === 100 ? (

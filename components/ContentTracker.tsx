@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Topic, ContentStatus, ExamTag, Subject, User, StudentProgress, Quiz } from '../types';
-import { Paperclip, Search, ChevronDown, X, Plus, Loader2, FileText, Printer, ShieldCheck, Trash2, Sparkles, BrainCircuit, FileSearch, FileX, ExternalLink, AlertCircle, Download, Check, Edit2, Filter, ArrowUpDown } from 'lucide-react';
+import { Paperclip, Search, ChevronDown, X, Plus, Loader2, FileText, Printer, ShieldCheck, Trash2, Sparkles, BrainCircuit, FileSearch, FileX, ExternalLink, AlertCircle, Download, Check, Edit2, Filter, ArrowUpDown, Upload } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import { Watermark } from './Watermark';
 import { formatLocalDate } from '../utils/dateUtils';
+import { CSVImporter } from './CSVImporter';
 
 interface ContentTrackerProps {
   topics: Topic[];
@@ -16,6 +17,7 @@ interface ContentTrackerProps {
   onUploadPDF_New: (id: string, file: File, summary: string) => Promise<void>;
   onDeletePDF: (id: string) => Promise<void>;
   onAddTopic: (topic: Topic) => void;
+  onBulkImport: (topics: Topic[]) => void; // NEW: Bulk import from CSV
   onUploadPDF: (id: string, hasMedia: boolean, pdfUrl?: string, pdfSummary?: string) => void;
   onDeleteTopic?: (id: string) => void;
   onSaveQuiz: (quiz: Quiz) => Promise<void>;
@@ -309,6 +311,7 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
   onUploadPDF_New,
   onDeletePDF,
   onAddTopic,
+  onBulkImport,
   onDeleteTopic,
   onSaveQuiz
 }) => {
@@ -361,6 +364,7 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [showCSVImporter, setShowCSVImporter] = useState(false);
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState<string | null>(null);
 
   // Admin Editing State
@@ -611,6 +615,16 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
   return (
     <div className="space-y-6">
       {viewerState && <SafeViewer topic={viewerState.topic} user={currentUser} type={viewerState.type} onClose={() => setViewerState(null)} />}
+      {showCSVImporter && (
+        <CSVImporter
+          subjects={subjects}
+          onImport={(topics) => {
+            onBulkImport(topics);
+            setShowCSVImporter(false);
+          }}
+          onClose={() => setShowCSVImporter(false)}
+        />
+      )}
       <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept=".pdf" />
 
       <div className="bg-white p-6 rounded-[32px] border shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -735,13 +749,22 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
         )}
 
         {isAdmin && (
-          <button
-            onClick={() => setIsAdding(!isAdding)}
-            className="px-6 py-4 bg-slate-900 text-white rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg active:scale-95"
-          >
-            {isAdding ? <X size={18} /> : <Plus size={18} />}
-            Novo Conteúdo
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowCSVImporter(true)}
+              className="px-6 py-4 bg-blue-600 text-white rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg active:scale-95"
+            >
+              <Upload size={18} />
+              Importar CSV
+            </button>
+            <button
+              onClick={() => setIsAdding(!isAdding)}
+              className="px-6 py-4 bg-slate-900 text-white rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg active:scale-95"
+            >
+              {isAdding ? <X size={18} /> : <Plus size={18} />}
+              Novo Conteúdo
+            </button>
+          </div>
         )}
       </div>
 
