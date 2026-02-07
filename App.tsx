@@ -44,7 +44,7 @@ const App: React.FC = () => {
         supabase.from('topics').select('*'),
         supabase.from('schedule').select('*').or(`user_id.eq.${currentUser.id},user_id.is.null`).throwOnError(),
         supabase.from('exams').select('*'),
-        supabase.from('internships').select('*'),
+        supabase.from('internships').select('id, title, local, location, evolution_model, status'),
         supabase.from('users').select('*'),
         supabase.from('grades').select('*').or(`user_id.eq.${currentUser.id},user_id.is.null`),
         supabase.from('quizzes').select('*').or(`user_id.eq.${currentUser.id},user_id.is.null`).order('created_at', { ascending: false })
@@ -440,8 +440,8 @@ const App: React.FC = () => {
           console.error("Erro ao deletar do banco:", error);
           alert("Erro ao remover estágio: " + error.message);
           // Re-fetch
-          const { data } = await supabase.from('internships').select('*');
-          if (data) setInternships(data);
+          const { data } = await supabase.from('internships').select('id, title, local, location, evolution_model, status');
+          if (data) setInternships(data.map((i: any) => ({ ...i, evolutionModel: i.evolution_model || '' })));
         }
       } catch (err) {
         console.error("Erro de rede ao deletar:", err);
