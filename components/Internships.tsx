@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { Internship } from '../types';
-import { MapPin, Calendar, Clock, ChevronRight, Plus, X, Trash2, Bold, Italic, Underline, Building2, Map as MapIcon, Type, Check, Navigation, AlertCircle } from 'lucide-react';
+import { MapPin, Calendar, Clock, ChevronRight, Plus, X, Trash2, Bold, Italic, Underline, Building2, Map as MapIcon, Type, Check, Navigation, AlertCircle, Download, Upload } from 'lucide-react';
 
 interface InternshipsProps {
   internships: Internship[];
@@ -62,6 +62,45 @@ export const Internships: React.FC<InternshipsProps> = ({ internships, onAdd, on
   // Temp inputs for adding a date
   const [tempDate, setTempDate] = useState('');
   const [tempHour, setTempHour] = useState('');
+
+  // Auto-sort internships by next upcoming date
+  const sortedInternships = useMemo(() => {
+    return [...internships].sort((a, b) => {
+      // Helper to get next date for an internship
+      const getNextDate = (internship: Internship) => {
+        let sched: typeof schedule = [];
+
+        if (internship.evolutionModel && internship.evolutionModel.startsWith('{"p":true')) {
+          try {
+            const packed = JSON.parse(internship.evolutionModel);
+            if (packed.s) sched = packed.s;
+          } catch { }
+        } else if (internship.schedule && Array.isArray(internship.schedule)) {
+          sched = internship.schedule;
+        } else {
+          const dateRaw = (internship as any).date;
+          if (dateRaw && (dateRaw.includes('-') || dateRaw.includes('/'))) {
+            sched = [{ date: dateRaw, hour: (internship as any).hour || '', status: 'pending' }];
+          }
+        }
+
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        const upcoming = sched
+          .map(s => new Date(`${s.date}T${s.hour || '00:00'}`))
+          .filter(d => d >= now)
+          .sort((x, y) => x.getTime() - y.getTime());
+
+        return upcoming[0] || new Date('2099-12-31'); // Far future if no upcoming dates
+      };
+
+      const nextA = getNextDate(a);
+      const nextB = getNextDate(b);
+
+      return nextA.getTime() - nextB.getTime();
+    });
+  }, [internships]);
 
   const resetForm = () => {
     setTitle('');
@@ -203,34 +242,219 @@ export const Internships: React.FC<InternshipsProps> = ({ internships, onAdd, on
     return { percent, next: upcoming[0] || null };
   };
 
+  // CSV Export Function
+  const handleExportCSV = () => {
+    // Expand all internships into individual schedule rows
+    const rows: string[][] = [['titulo', 'local', 'endereco', 'data', 'horario', 'status']];
+
+    sortedInternships.forEach(internship => {
+      let sched: typeof schedule = [];
+      let loc = internship.location || '';
+
+      // Unpack schedule data
+      if (internship.evolutionModel && internship.evolutionModel.startsWith('{"p":true')) {
+        try {
+          const packed = JSON.parse(internship.evolutionModel);
+          if (packed.s) sched = packed.s;
+          if (packed.l) loc = packed.l;
+        } catch { }
+      } else if (internship.schedule && Array.isArray(internship.schedule)) {
+        sched = internship.schedule;
+      }
+
+      // Add one row per schedule entry
+      sched.forEach(s => {
+        rows.push([
+          internship.title,
+          internship.local || '',
+          loc,
+          s.date,
+          s.hour || '',
+          s.status || 'pending'
+        ]);
+      });
+    });
+
+    // Generate CSV content
+    const csvContent = rows.map(row =>
+      row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+
+    // Trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `estagios_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // CSV Import State
+  const [isImporting, setIsImporting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<any[]>([]);
+
+  const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportFile(file);
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split('\n').filter(l => l.trim());
+      const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+
+      const preview = lines.slice(1, 6).map(line => {
+        const values = line.split(',').map(v => v.replace(/"/g, '').trim());
+        return {
+          titulo: values[0],
+          local: values[1],
+          endereco: values[2],
+          data: values[3],
+          horario: values[4],
+          status: values[5]
+        };
+      });
+
+      setImportPreview(preview);
+      setIsImporting(true);
+    };
+
+    reader.readAsText(file);
+  };
+
+  const confirmImport = () => {
+    if (!importFile) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split('\n').filter(l => l.trim());
+
+      // Group by internship title
+      const grouped = new Map<string, any[]>();
+
+      lines.slice(1).forEach(line => {
+        const values = line.split(',').map(v => v.replace(/"/g, '').trim());
+        const [titulo, local, endereco, data, horario, status] = values;
+
+        if (!grouped.has(titulo)) {
+          grouped.set(titulo, []);
+        }
+
+        grouped.get(titulo)!.push({
+          date: data,
+          hour: horario,
+          status: status || 'pending'
+        });
+      });
+
+      // Create internships
+      grouped.forEach((schedules, titulo) => {
+        const firstEntry = lines.slice(1).find(l => l.includes(titulo));
+        if (!firstEntry) return;
+
+        const values = firstEntry.split(',').map(v => v.replace(/"/g, '').trim());
+        const [, local, endereco] = values;
+
+        const newInternship: Internship = {
+          id: `imported_${Date.now()}_${Math.random()}`,
+          title: titulo,
+          local: local,
+          location: endereco,
+          schedule: schedules,
+          evolutionModel: '',
+          status: 'Em Andamento'
+        };
+
+        onAdd(newInternship);
+      });
+
+      setIsImporting(false);
+      setImportFile(null);
+      setImportPreview([]);
+    };
+
+    reader.readAsText(importFile);
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
 
       <div className="flex flex-col md:flex-row items-start justify-between gap-6">
         {/* Title removed per user request, but we keep the row for the Next Activity or Button if needed */}
 
-        {nextInternship && (
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-blue-500/20 w-full md:w-auto relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-y-10 translate-x-10 group-hover:scale-150 transition-transform duration-700" />
+        {nextInternship && (() => {
+          // Calculate relative time
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+          const targetDate = new Date(nextInternship.dateObj);
+          targetDate.setHours(0, 0, 0, 0);
+          const diffDays = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-            <div className="flex items-center gap-4 relative z-10">
-              <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl">
-                <Clock className="animate-pulse" size={24} />
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-1">Próxima Atividade</p>
-                <h3 className="text-xl font-bold leading-none mb-1">{nextInternship.title}</h3>
-                <p className="text-sm font-medium opacity-90">
-                  {nextInternship.dateObj.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })} • {nextInternship.hour}
-                </p>
+          let relativeTime = '';
+          if (diffDays === 0) relativeTime = 'Hoje';
+          else if (diffDays === 1) relativeTime = 'Amanhã';
+          else if (diffDays === 2) relativeTime = 'Depois de amanhã';
+          else relativeTime = `Daqui a ${diffDays} dias`;
+
+          return (
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-blue-500/20 w-full md:w-auto relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-y-10 translate-x-10 group-hover:scale-150 transition-transform duration-700" />
+
+              <div className="flex items-start gap-4 relative z-10">
+                <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl">
+                  <Clock className="animate-pulse" size={24} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-1">Próxima Atividade • {relativeTime}</p>
+                  <h3 className="text-xl font-bold leading-tight mb-1">{nextInternship.title}</h3>
+                  <div className="flex items-center gap-2 mb-2">
+                    <MapPin size={14} className="opacity-80" />
+                    <p className="text-sm font-medium opacity-90">{nextInternship.local}</p>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm font-medium opacity-90">
+                    <span className="flex items-center gap-1">
+                      <Calendar size={14} />
+                      {nextInternship.dateObj.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <Clock size={14} />
+                      {nextInternship.hour}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {!isAdding && (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={handleExportCSV}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl font-bold uppercase tracking-widest text-xs flex items-center gap-2 shadow-lg hover:-translate-y-1 transition-all"
+          >
+            <Download size={18} /> Exportar CSV
+          </button>
+
+          <label className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold uppercase tracking-widest text-xs flex items-center gap-2 shadow-lg hover:-translate-y-1 transition-all cursor-pointer">
+            <Upload size={18} /> Importar CSV
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleImportCSV}
+              className="hidden"
+            />
+          </label>
+
           <button
             onClick={() => { resetForm(); setIsAdding(true); }}
             className="bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-2xl font-bold uppercase tracking-widest text-xs flex items-center gap-2 shadow-lg hover:-translate-y-1 transition-all"
@@ -355,7 +579,7 @@ export const Internships: React.FC<InternshipsProps> = ({ internships, onAdd, on
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {internships.map(internship => {
+        {sortedInternships.map(internship => {
           // Unpack Data Strategy
           let sched: typeof schedule = [];
           let loc = internship.location || '';
@@ -463,49 +687,135 @@ export const Internships: React.FC<InternshipsProps> = ({ internships, onAdd, on
               )}
 
               <div className="space-y-2 max-h-[150px] overflow-y-auto custom-scrollbar">
-                {sched.map((s, idx) => (
+                {sched
+                  .sort((a, b) => {
+                    const dateA = new Date(`${a.date}T${a.hour || '00:00'}`);
+                    const dateB = new Date(`${b.date}T${b.hour || '00:00'}`);
+                    return dateA.getTime() - dateB.getTime();
+                  })
+                  .map((s, idx) => (
 
-                  <div key={idx} className="flex items-center justify-between text-xs group/date">
-                    <span className={`font-medium ${s.status === 'present' ? 'text-emerald-600' : s.status === 'absent' ? 'text-rose-600 decoration-line-through' : 'text-slate-600'}`}>
-                      {new Date(s.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} • {s.hour}
-                    </span>
+                    <div key={idx} className="flex items-center justify-between text-xs group/date">
+                      <span className={`font-medium ${s.status === 'present' ? 'text-emerald-600' : s.status === 'absent' ? 'text-rose-600 decoration-line-through' : 'text-slate-600'}`}>
+                        {new Date(s.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} • {s.hour}
+                      </span>
 
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 group-hover/date:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => updateStatus(idx, 'present')}
-                        title="Presente"
-                        className={`p-1 rounded-md transition-all ${s.status === 'present' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-emerald-400 hover:bg-emerald-100'}`}
-                      >
-                        <Check size={12} strokeWidth={3} />
-                      </button>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 group-hover/date:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => updateStatus(idx, 'present')}
+                          title="Presente"
+                          className={`p-1 rounded-md transition-all ${s.status === 'present' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-emerald-400 hover:bg-emerald-100'}`}
+                        >
+                          <Check size={12} strokeWidth={3} />
+                        </button>
 
-                      <button
-                        onClick={() => updateStatus(idx, 'absent')}
-                        title="Faltou"
-                        className={`p-1 rounded-md transition-all ${s.status === 'absent' ? 'bg-rose-500 text-white' : 'bg-slate-100 text-rose-400 hover:bg-rose-100'}`}
-                      >
-                        <X size={12} strokeWidth={3} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          const newSched = sched.filter((_, i) => i !== idx);
-                          const updated = { ...internship, schedule: newSched, location: loc, evolutionModel: evo };
-                          onUpdate(updated);
-                        }}
-                        title="Remover Data"
-                        className="p-1 rounded-md transition-all bg-slate-100 text-slate-400 hover:bg-rose-100 hover:text-rose-500"
-                      >
-                        <Trash2 size={12} strokeWidth={3} />
-                      </button>
+                        <button
+                          onClick={() => updateStatus(idx, 'absent')}
+                          title="Faltou"
+                          className={`p-1 rounded-md transition-all ${s.status === 'absent' ? 'bg-rose-500 text-white' : 'bg-slate-100 text-rose-400 hover:bg-rose-100'}`}
+                        >
+                          <X size={12} strokeWidth={3} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            const newSched = sched.filter((_, i) => i !== idx);
+                            const updated = { ...internship, schedule: newSched, location: loc, evolutionModel: evo };
+                            onUpdate(updated);
+                          }}
+                          title="Remover Data"
+                          className="p-1 rounded-md transition-all bg-slate-100 text-slate-400 hover:bg-rose-100 hover:text-rose-500"
+                        >
+                          <Trash2 size={12} strokeWidth={3} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           );
         })
         }
       </div>
-    </div >
+
+      {/* Import Preview Modal */}
+      {isImporting && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-4xl w-full max-h-[80vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-slate-900">Preview da Importação</h2>
+              <button
+                onClick={() => {
+                  setIsImporting(false);
+                  setImportFile(null);
+                  setImportPreview([]);
+                }}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-sm text-slate-600 mb-4">
+                Prévia das primeiras 5 entradas do arquivo CSV:
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-100">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-bold">Título</th>
+                      <th className="px-4 py-2 text-left font-bold">Local</th>
+                      <th className="px-4 py-2 text-left font-bold">Endereço</th>
+                      <th className="px-4 py-2 text-left font-bold">Data</th>
+                      <th className="px-4 py-2 text-left font-bold">Horário</th>
+                      <th className="px-4 py-2 text-left font-bold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.map((row, idx) => (
+                      <tr key={idx} className="border-b border-slate-100">
+                        <td className="px-4 py-2">{row.titulo}</td>
+                        <td className="px-4 py-2">{row.local}</td>
+                        <td className="px-4 py-2">{row.endereco}</td>
+                        <td className="px-4 py-2">{row.data}</td>
+                        <td className="px-4 py-2">{row.horario}</td>
+                        <td className="px-4 py-2">
+                          <span className={`px-2 py-1 rounded-full text-xs ${row.status === 'present' ? 'bg-emerald-100 text-emerald-700' :
+                              row.status === 'absent' ? 'bg-rose-100 text-rose-700' :
+                                'bg-slate-100 text-slate-700'
+                            }`}>
+                            {row.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setIsImporting(false);
+                  setImportFile(null);
+                  setImportPreview([]);
+                }}
+                className="px-6 py-3 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmImport}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg transition-all"
+              >
+                Confirmar Importação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };

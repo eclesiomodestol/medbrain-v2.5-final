@@ -319,33 +319,6 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
                   ></div>
                 </div>
 
-                {/* Breakdown por Subespecialidade */}
-                {progressData.breakdown.length > 1 && (
-                  <div className="space-y-3 pt-2 border-t border-slate-100">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                      📊 Progresso por Subespecialidade
-                    </span>
-                    {progressData.breakdown.map(sub => (
-                      <div key={sub.subspecialty} className="space-y-1.5">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs font-bold text-slate-700">{sub.subspecialty}</span>
-                          <span className="text-xs font-black text-slate-900">{sub.percentage}%</span>
-                        </div>
-                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-500"
-                            style={{ width: `${sub.percentage}%` }}
-                          />
-                        </div>
-                        <div className="flex gap-3 text-[9px] text-slate-500 font-bold">
-                          <span className="flex items-center gap-1">✓ {sub.completed} Concluídos</span>
-                          <span className="flex items-center gap-1">📚 {sub.total} Total</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
                 <div className="flex items-center gap-2 pt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   {progress === 100 ? (
                     <span className="flex items-center gap-1.5 text-emerald-500 animate-bounce">

@@ -840,13 +840,21 @@ const App: React.FC = () => {
                 };
 
                 try {
-                  const { error } = await supabase.from('internships').insert(dbPayload);
+                  const { error, data } = await supabase.from('internships').insert(dbPayload).select();
                   if (error) {
-                    console.error("Erro ao salvar no banco (Offline?):", error);
-                    // Optional: Show toast "Salvo apenas localmente"
+                    console.error("❌ ERRO ao salvar estágio no banco:", error);
+                    console.error("Payload que falhou:", dbPayload);
+                    // ROLLBACK: Remove from UI since DB insert failed
+                    setInternships(prev => prev.filter(i => i.id !== internship.id));
+                    alert(`Erro ao salvar estágio: ${error.message}`);
+                  } else {
+                    console.log("✅ Estágio salvo com sucesso:", data);
                   }
                 } catch (err) {
-                  console.error("Erro de rede/Fetch:", err);
+                  console.error("❌ Erro de rede/Fetch ao salvar estágio:", err);
+                  // ROLLBACK: Remove from UI since network failed
+                  setInternships(prev => prev.filter(i => i.id !== internship.id));
+                  alert('Erro de rede ao salvar estágio. Verifique sua conexão.');
                 }
               }}
               onUpdate={async (internship) => {

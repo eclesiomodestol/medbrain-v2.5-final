@@ -199,7 +199,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       return topics
         .filter(t => t.date === dateStr)
         .sort((a, b) => {
-          const shiftOrder: Record<string, number> = { 'Manhã': 1, 'Tarde': 2, 'Noite': 3 };
+          const shiftOrder: Record<string, number> = { 'MANHÃ': 1, 'TARDE': 2, 'NOITE': 3 };
           return (shiftOrder[a.shift || ''] || 99) - (shiftOrder[b.shift || ''] || 99);
         });
     };
