@@ -191,6 +191,62 @@ export const GradesPanel: React.FC<GradesPanelProps> = ({ subjects, grades, onUp
 
               {isEditing ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                  {/* Indicador de Progresso para Aprovação */}
+                  {(() => {
+                    const currentGrades = calculateComponentGrades(formData!);
+                    const currentTotal = currentGrades.pr1 + currentGrades.pr2; // Total de pontos (0-20)
+                    const neededTotal = 14.0; // Total necessário para aprovação (média 7.0)
+                    const neededForApproval = Math.max(0, neededTotal - currentTotal);
+                    const progressPercent = Math.min((currentTotal / neededTotal) * 100, 100);
+                    const currentAvg = currentTotal / 2;
+
+                    return (
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-3xl p-6 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-600 rounded-xl">
+                              <TrendingUp size={20} className="text-white" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-black text-blue-900 uppercase tracking-tight">Progresso para Aprovação</h4>
+                              <p className="text-[10px] text-blue-600 font-bold">Média necessária: 7.0</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`text-3xl font-black ${currentAvg >= 7 ? 'text-emerald-600' : currentAvg >= 5 ? 'text-amber-600' : 'text-slate-400'}`}>
+                              {currentAvg > 0 ? currentAvg.toFixed(2) : '0.00'}
+                            </div>
+                            <span className="text-[9px] font-bold text-blue-600 uppercase">Média Atual</span>
+                          </div>
+                        </div>
+
+                        {/* Barra de Progresso */}
+                        <div className="space-y-2">
+                          <div className="w-full h-4 bg-white rounded-full overflow-hidden border-2 border-blue-200">
+                            <div
+                              className={`h-full transition-all duration-500 ${currentAvg >= 7 ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : currentAvg >= 5 ? 'bg-gradient-to-r from-amber-500 to-amber-600' : 'bg-gradient-to-r from-blue-400 to-blue-500'}`}
+                              style={{ width: `${progressPercent}%` }}
+                            ></div>
+                          </div>
+
+                          {currentAvg < 7 ? (
+                            <div className="flex items-center justify-between text-[10px] font-bold">
+                              <span className="text-blue-700">
+                                {neededForApproval > 0 ? `Faltam ${neededForApproval.toFixed(2)} pontos para aprovação` : 'Aprovado! 🎉'}
+                              </span>
+                              <span className="text-blue-500">{progressPercent.toFixed(0)}% completo</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-emerald-700 text-[10px] font-black">
+                              <CheckCircle2 size={14} />
+                              <span>APROVADO! Você atingiu a média necessária! 🎉</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {isSpecial ? (
                     <div className="space-y-4">
                       {/* Componentes Principais */}
