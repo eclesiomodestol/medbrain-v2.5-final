@@ -829,13 +829,9 @@ const App: React.FC = () => {
 
                 const dbPayload = {
                   id: internship.id,
-                  // user_id: currentUser?.id, // Column removed from DB insert
                   title: internship.title,
                   local: internship.local,
                   evolution_model: JSON.stringify(packedData),
-                  // Fallback columns for sorting/query (if they exist)
-                  date: internship.schedule && internship.schedule.length > 0 ? (internship.schedule[0] as any).date : undefined,
-                  hour: internship.schedule && internship.schedule.length > 0 ? (internship.schedule[0] as any).hour : undefined,
                   status: internship.status
                 };
 
@@ -874,8 +870,6 @@ const App: React.FC = () => {
                   title: internship.title,
                   local: internship.local,
                   evolution_model: JSON.stringify(packedData),
-                  date: internship.schedule && internship.schedule.length > 0 ? (internship.schedule[0] as any).date : undefined,
-                  hour: internship.schedule && internship.schedule.length > 0 ? (internship.schedule[0] as any).hour : undefined,
                   status: internship.status
                 };
 
