@@ -12,6 +12,11 @@ import { Login } from './components/Login';
 import { UserManagement } from './components/UserManagement';
 import { UserProfile } from './components/UserProfile';
 import { GradesPanel } from './components/GradesPanel';
+import { AdminPanel } from './components/AdminPanel';
+import { PomodoroTimer } from './components/PomodoroTimer';
+import { StudyReports } from './components/StudyReports';
+import { PomodoroProvider } from './contexts/PomodoroContext';
+import { useSessionManager } from './hooks/useSessionManager';
 import { supabase } from './supabase';
 import { Topic, ContentStatus, ExamTag, Subject, StudentProgress, User, Exam, Internship, Grade, ScheduleEntry, Quiz } from './types';
 
@@ -23,7 +28,7 @@ const App: React.FC = () => {
   const [deletingItem, setDeletingItem] = useState<{ id: string, type: 'schedule' | 'internship' | 'topic' | 'pdf' | 'exam' | 'user' } | null>(null);
 
   const [users, setUsers] = useState<User[]>([]);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'syllabus' | 'exams' | 'estagio' | 'quiz' | 'users' | 'grades' | 'profile'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'syllabus' | 'exams' | 'estagio' | 'quiz' | 'users' | 'grades' | 'profile' | 'admin' | 'study'>('dashboard');
   const [topics, setTopics] = useState<Topic[]>([]);
   const [scheduleData, setScheduleData] = useState<ScheduleEntry[]>([]);
   const [examsData, setExamsData] = useState<Exam[]>([]);
@@ -35,6 +40,9 @@ const App: React.FC = () => {
   const [quizHistory, setQuizHistory] = useState<Quiz[]>([]);
   const [studentProgress, setStudentProgress] = useState<StudentProgress[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+
+  // Initialize session tracking
+  useSessionManager();
 
   const fetchAllData = async () => {
     if (!currentUser) return;
@@ -536,418 +544,426 @@ const App: React.FC = () => {
   if (!currentUser) return <Login onLogin={handleLogin} users={users} />;
 
   return (
-    <div className="flex min-h-screen bg-[#F3F4F6]">
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        currentUser={currentUser}
-        onLogout={handleLogout}
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-      />
-      <main className="flex-1 p-4 lg:p-8 lg:ml-64 overflow-y-auto">
-        <header className="mb-8 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-200 rounded-xl transition-colors"
-            >
-              <Menu size={24} />
-            </button>
-            <div className="space-y-1">
-              <h1 className="text-3xl font-black text-[#0F172A] tracking-tight capitalize">
-                {activeTab === 'exams' ? 'Calendário de Provas' : activeTab === 'syllabus' ? 'Ementa e Conteúdos' : activeTab === 'schedule' ? 'Horário Acadêmico' : activeTab.replace('-', ' ')}
-              </h1>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                MedBrain Engine v2.5 • Ciclo Clínico (7º Semestre)
-              </p>
+    <PomodoroProvider>
+      <div className="flex min-h-screen bg-[#F3F4F6]">
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
+
+        {/* Floating Pomodoro Timer */}
+        <PomodoroTimer subjects={subjectsState.map(s => ({ id: s.id, name: s.name }))} />
+
+        <main className="flex-1 p-4 lg:p-8 lg:ml-64 overflow-y-auto">
+          <header className="mb-8 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="lg:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                <Menu size={24} />
+              </button>
+              <div className="space-y-1">
+                <h1 className="text-3xl font-black text-[#0F172A] tracking-tight capitalize">
+                  {activeTab === 'exams' ? 'Calendário de Provas' : activeTab === 'syllabus' ? 'Ementa e Conteúdos' : activeTab === 'schedule' ? 'Horário Acadêmico' : activeTab.replace('-', ' ')}
+                </h1>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  MedBrain Engine v2.5 • Ciclo Clínico (7º Semestre)
+                </p>
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-          {activeTab === 'dashboard' && (
-            <Dashboard
-              topics={filteredTopics}
-              subjects={subjectsState}
-              studentProgress={studentProgress}
-              schedule={scheduleData}
-              exams={examsData}
-              quizzes={quizzes}
-              currentUser={currentUser}
-              setActiveTab={setActiveTab}
-            />
-          )}
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {activeTab === 'dashboard' && (
+              <Dashboard
+                topics={filteredTopics}
+                subjects={subjectsState}
+                studentProgress={studentProgress}
+                schedule={scheduleData}
+                exams={examsData}
+                quizzes={quizzes}
+                currentUser={currentUser}
+                setActiveTab={setActiveTab}
+              />
+            )}
 
-          {activeTab === 'syllabus' && (
-            <ContentTracker
-              topics={filteredTopics}
-              subjects={subjectsState}
-              quizzes={quizzes}
-              currentUser={currentUser}
-              studentProgress={studentProgress}
-              onUpdateStatus={handleUpdateContentStatus}
-              onUpdateTopic={async (updated) => {
-                setTopics(prev => prev.map(t => t.id === updated.id ? updated : t));
-                try {
-                  const payload = {
-                    title: updated.title,
-                    subject_id: updated.subjectId,
-                    date: updated.date,
-                    shift: updated.shift,
-                    tag: updated.tag,
-                    front: updated.front
-                  };
-
-                  let { error } = await supabase.from('topics').update(payload).eq('id', updated.id);
-
-                  // Fallback if column 'shift' doesn't exist yet
-                  if (error && (error as any).code === '42703') {
-                    const safePayload = { ...payload };
-                    delete (safePayload as any).shift;
-                    const { error: retryError } = await supabase.from('topics').update(safePayload).eq('id', updated.id);
-                    if (retryError) {
-                      alert(`Erro ao atualizar (retry): ${retryError.message}`);
-                    }
-                  } else if (error) {
-                    alert(`Erro ao atualizar: ${error.message}`);
-                  }
-                } catch (e: any) {
-                  alert(`Erro inesperado na atualização: ${e.message}`);
-                }
-              }}
-              onUploadPDF_New={uploadPDF}
-              onDeletePDF={deletePDF}
-              onAddTopic={async (newTopic) => {
-                // Optimistic update
-                setTopics(prev => [...prev, newTopic]);
-
-                try {
-                  const dbPayload = {
-                    id: newTopic.id,
-                    title: newTopic.title,
-                    subject_id: newTopic.subjectId,
-                    date: newTopic.date,
-                    shift: newTopic.shift,
-                    tag: newTopic.tag,
-                    front: newTopic.front,
-                    status: ContentStatus.PENDENTE,
-                    has_media: false
-                  };
-
-                  console.log('Tentando inserir conteúdo:', dbPayload);
-
-                  let { error } = await supabase.from('topics').insert(dbPayload);
-
-                  // Fallback if column 'shift' doesn't exist yet
-                  if (error && (error as any).code === '42703') {
-                    console.log('Coluna shift não existe, tentando sem ela...');
-                    const safePayload = { ...dbPayload };
-                    delete (safePayload as any).shift;
-                    const { error: retryError } = await supabase.from('topics').insert(safePayload);
-                    if (retryError) {
-                      console.error('Erro no retry:', retryError);
-                      throw new Error(`Erro ao criar conteúdo (retry): ${retryError.message}`);
-                    }
-                  } else if (error) {
-                    console.error('Erro ao inserir:', error);
-                    throw new Error(`Erro ao criar conteúdo: ${error.message}`);
-                  }
-
-                  console.log('Conteúdo criado com sucesso!');
-                } catch (e: any) {
-                  console.error('Erro capturado:', e);
-                  // Rollback optimistic update
-                  setTopics(prev => prev.filter(t => t.id !== newTopic.id));
-
-                  // User-friendly error message
-                  if (e.message && e.message.includes('Failed to fetch')) {
-                    alert('Erro de conexão: Verifique sua internet e se o Supabase está configurado corretamente.');
-                  } else if (e.name === 'TypeError' && e.message.includes('Load failed')) {
-                    alert('Erro de conexão com o banco de dados. Verifique:\n1. Conexão com internet\n2. Configuração do Supabase (supabase.ts)\n3. CORS no projeto Supabase');
-                  } else {
-                    alert(`Erro ao criar conteúdo: ${e.message || 'Erro desconhecido'}`);
-                  }
-                }
-              }}
-              onBulkImport={async (newTopics) => {
-                // Optimistic update
-                setTopics(prev => [...prev, ...newTopics]);
-
-                try {
-                  const dbPayloads = newTopics.map(topic => ({
-                    id: topic.id,
-                    title: topic.title,
-                    subject_id: topic.subjectId,
-                    date: topic.date,
-                    shift: topic.shift,
-                    tag: topic.tag,
-                    front: topic.front,
-                    status: ContentStatus.PENDENTE,
-                    has_media: false
-                  }));
-
-                  console.log(`Tentando inserir ${dbPayloads.length} conteúdos em lote...`);
-
-                  let { error } = await supabase.from('topics').insert(dbPayloads);
-
-                  // Fallback if column 'shift' doesn't exist yet
-                  if (error && (error as any).code === '42703') {
-                    console.log('Coluna shift não existe, tentando sem ela...');
-                    const safePayloads = dbPayloads.map(p => {
-                      const safe = { ...p };
-                      delete (safe as any).shift;
-                      return safe;
-                    });
-                    const { error: retryError } = await supabase.from('topics').insert(safePayloads);
-                    if (retryError) {
-                      console.error('Erro no retry:', retryError);
-                      throw new Error(`Erro ao importar conteúdos (retry): ${retryError.message}`);
-                    }
-                  } else if (error) {
-                    console.error('Erro ao inserir em lote:', error);
-                    throw new Error(`Erro ao importar conteúdos: ${error.message}`);
-                  }
-
-                  console.log(`${dbPayloads.length} conteúdos importados com sucesso!`);
-                  alert(`✅ ${dbPayloads.length} conteúdos importados com sucesso!`);
-                } catch (e: any) {
-                  console.error('Erro capturado:', e);
-                  // Rollback optimistic update
-                  const newIds = newTopics.map(t => t.id);
-                  setTopics(prev => prev.filter(t => !newIds.includes(t.id)));
-
-                  // User-friendly error message
-                  if (e.message && e.message.includes('Failed to fetch')) {
-                    alert('Erro de conexão: Verifique sua internet e se o Supabase está configurado corretamente.');
-                  } else if (e.name === 'TypeError' && e.message.includes('Load failed')) {
-                    alert('Erro de conexão com o banco de dados. Verifique:\n1. Conexão com internet\n2. Configuração do Supabase (supabase.ts)\n3. CORS no projeto Supabase');
-                  } else {
-                    alert(`Erro ao importar conteúdos: ${e.message || 'Erro desconhecido'}`);
-                  }
-                }
-              }}
-              onUploadPDF={() => { }}
-              onDeleteTopic={handleDeleteTopic}
-              onSaveQuiz={handleSaveQuiz}
-            />
-          )}
-          {activeTab === 'schedule' && (
-            <Schedule
-              schedule={scheduleData}
-              subjects={subjectsState}
-              onUpdate={async (entry) => {
-                // Optimistic Update
-                setScheduleData(prev => prev.map(s => s.id === entry.id ? entry : s));
-
-                try {
-                  const { error } = await supabase.from('schedule').update({
-                    day: entry.day,
-                    period: entry.period,
-                    subject_id: entry.subjectId,
-                    front: entry.front,
-                    user_id: currentUser?.id
-                  }).eq('id', entry.id);
-
-                  if (error) console.error("Erro ao atualizar horário:", error);
-                } catch (err) { console.error("Erro de rede:", err); }
-              }}
-              onAdd={async (entry) => {
-                // Optimistic Update
-                setScheduleData(prev => [...prev, entry]);
-
-                try {
-                  const { error } = await supabase.from('schedule').insert({
-                    id: entry.id,
-                    day: entry.day,
-                    period: entry.period,
-                    subject_id: entry.subjectId,
-                    front: entry.front,
-                    user_id: currentUser?.id
-                  });
-
-                  if (error) console.error("Erro ao adicionar horário:", error);
-                } catch (err) { console.error("Erro de rede:", err); }
-              }}
-              onDelete={(id) => setDeletingItem({ id, type: 'schedule' })}
-              onUpdateSubjectColor={async (subjectId, color) => {
-                // Optimistic Update
-                setSubjectsState(prev => prev.map(s => s.id === subjectId ? { ...s, color } : s));
-
-                try {
-                  const { error } = await supabase.from('subjects').update({ color }).eq('id', subjectId);
-
-                  if (error) console.error("Erro ao atualizar cor:", error);
-                } catch (err) { console.error("Erro de rede:", err); }
-              }}
-            />
-          )}
-          {activeTab === 'exams' && (
-            <ExamsPanel
-              topics={filteredTopics}
-              exams={examsData}
-              subjects={subjectsState}
-              quizzes={quizzes}
-              studentProgress={studentProgress}
-              currentUser={currentUser}
-              onUpdateExam={handleUpdateExam}
-              onDeleteExam={handleDeleteExam}
-            />
-          )}
-          {activeTab === 'estagio' && (
-            <Internships
-              internships={internships.filter(i => {
-                // Client-side filtering strategy
-                // 1. Optimistic / Direct Ownership check
-                if ((i as any).uid === currentUser?.id) return true;
-                if ((i as any).user_id && (i as any).user_id === currentUser?.id) return true;
-
-                if (i.evolutionModel && i.evolutionModel.startsWith('{"p":true')) {
+            {activeTab === 'syllabus' && (
+              <ContentTracker
+                topics={filteredTopics}
+                subjects={subjectsState}
+                quizzes={quizzes}
+                currentUser={currentUser}
+                studentProgress={studentProgress}
+                onUpdateStatus={handleUpdateContentStatus}
+                onUpdateTopic={async (updated) => {
+                  setTopics(prev => prev.map(t => t.id === updated.id ? updated : t));
                   try {
-                    const p = JSON.parse(i.evolutionModel);
-                    return p.uid === currentUser?.id;
-                  } catch { return false; }
-                }
-                // Legacy with no owner info: HIDE to prevent sharing.
-                return false;
-              })}
-              onAdd={async (internship) => {
-                // OPTIMISTIC UPDATE: Add to UI immediately
-                // We add the 'uid' to the local object so it passes the ownership filter
-                const optimisticInternship = { ...internship, uid: currentUser?.id };
-                setInternships(prev => [...prev, optimisticInternship]);
+                    const payload = {
+                      title: updated.title,
+                      subject_id: updated.subjectId,
+                      date: updated.date,
+                      shift: updated.shift,
+                      tag: updated.tag,
+                      front: updated.front
+                    };
 
-                // DATA PACKING STRATEGY:
-                // Pack s (schedule), l (location), uid (userID) into evolution_model
-                const packedData = {
-                  p: true, // flag
-                  s: internship.schedule,
-                  l: internship.location,
-                  em: internship.evolutionModel,
-                  uid: currentUser?.id // Store ownership here
-                };
+                    let { error } = await supabase.from('topics').update(payload).eq('id', updated.id);
 
-                const dbPayload = {
-                  id: internship.id,
-                  title: internship.title,
-                  local: internship.local,
-                  evolution_model: JSON.stringify(packedData),
-                  status: internship.status
-                };
+                    // Fallback if column 'shift' doesn't exist yet
+                    if (error && (error as any).code === '42703') {
+                      const safePayload = { ...payload };
+                      delete (safePayload as any).shift;
+                      const { error: retryError } = await supabase.from('topics').update(safePayload).eq('id', updated.id);
+                      if (retryError) {
+                        alert(`Erro ao atualizar (retry): ${retryError.message}`);
+                      }
+                    } else if (error) {
+                      alert(`Erro ao atualizar: ${error.message}`);
+                    }
+                  } catch (e: any) {
+                    alert(`Erro inesperado na atualização: ${e.message}`);
+                  }
+                }}
+                onUploadPDF_New={uploadPDF}
+                onDeletePDF={deletePDF}
+                onAddTopic={async (newTopic) => {
+                  // Optimistic update
+                  setTopics(prev => [...prev, newTopic]);
 
-                try {
-                  const { error, data } = await supabase.from('internships').insert(dbPayload).select();
-                  if (error) {
-                    console.error("❌ ERRO ao salvar estágio no banco:", error);
-                    console.error("Payload que falhou:", dbPayload);
-                    // ROLLBACK: Remove from UI since DB insert failed
+                  try {
+                    const dbPayload = {
+                      id: newTopic.id,
+                      title: newTopic.title,
+                      subject_id: newTopic.subjectId,
+                      date: newTopic.date,
+                      shift: newTopic.shift,
+                      tag: newTopic.tag,
+                      front: newTopic.front,
+                      status: ContentStatus.PENDENTE,
+                      has_media: false
+                    };
+
+                    console.log('Tentando inserir conteúdo:', dbPayload);
+
+                    let { error } = await supabase.from('topics').insert(dbPayload);
+
+                    // Fallback if column 'shift' doesn't exist yet
+                    if (error && (error as any).code === '42703') {
+                      console.log('Coluna shift não existe, tentando sem ela...');
+                      const safePayload = { ...dbPayload };
+                      delete (safePayload as any).shift;
+                      const { error: retryError } = await supabase.from('topics').insert(safePayload);
+                      if (retryError) {
+                        console.error('Erro no retry:', retryError);
+                        throw new Error(`Erro ao criar conteúdo (retry): ${retryError.message}`);
+                      }
+                    } else if (error) {
+                      console.error('Erro ao inserir:', error);
+                      throw new Error(`Erro ao criar conteúdo: ${error.message}`);
+                    }
+
+                    console.log('Conteúdo criado com sucesso!');
+                  } catch (e: any) {
+                    console.error('Erro capturado:', e);
+                    // Rollback optimistic update
+                    setTopics(prev => prev.filter(t => t.id !== newTopic.id));
+
+                    // User-friendly error message
+                    if (e.message && e.message.includes('Failed to fetch')) {
+                      alert('Erro de conexão: Verifique sua internet e se o Supabase está configurado corretamente.');
+                    } else if (e.name === 'TypeError' && e.message.includes('Load failed')) {
+                      alert('Erro de conexão com o banco de dados. Verifique:\n1. Conexão com internet\n2. Configuração do Supabase (supabase.ts)\n3. CORS no projeto Supabase');
+                    } else {
+                      alert(`Erro ao criar conteúdo: ${e.message || 'Erro desconhecido'}`);
+                    }
+                  }
+                }}
+                onBulkImport={async (newTopics) => {
+                  // Optimistic update
+                  setTopics(prev => [...prev, ...newTopics]);
+
+                  try {
+                    const dbPayloads = newTopics.map(topic => ({
+                      id: topic.id,
+                      title: topic.title,
+                      subject_id: topic.subjectId,
+                      date: topic.date,
+                      shift: topic.shift,
+                      tag: topic.tag,
+                      front: topic.front,
+                      status: ContentStatus.PENDENTE,
+                      has_media: false
+                    }));
+
+                    console.log(`Tentando inserir ${dbPayloads.length} conteúdos em lote...`);
+
+                    let { error } = await supabase.from('topics').insert(dbPayloads);
+
+                    // Fallback if column 'shift' doesn't exist yet
+                    if (error && (error as any).code === '42703') {
+                      console.log('Coluna shift não existe, tentando sem ela...');
+                      const safePayloads = dbPayloads.map(p => {
+                        const safe = { ...p };
+                        delete (safe as any).shift;
+                        return safe;
+                      });
+                      const { error: retryError } = await supabase.from('topics').insert(safePayloads);
+                      if (retryError) {
+                        console.error('Erro no retry:', retryError);
+                        throw new Error(`Erro ao importar conteúdos (retry): ${retryError.message}`);
+                      }
+                    } else if (error) {
+                      console.error('Erro ao inserir em lote:', error);
+                      throw new Error(`Erro ao importar conteúdos: ${error.message}`);
+                    }
+
+                    console.log(`${dbPayloads.length} conteúdos importados com sucesso!`);
+                    alert(`✅ ${dbPayloads.length} conteúdos importados com sucesso!`);
+                  } catch (e: any) {
+                    console.error('Erro capturado:', e);
+                    // Rollback optimistic update
+                    const newIds = newTopics.map(t => t.id);
+                    setTopics(prev => prev.filter(t => !newIds.includes(t.id)));
+
+                    // User-friendly error message
+                    if (e.message && e.message.includes('Failed to fetch')) {
+                      alert('Erro de conexão: Verifique sua internet e se o Supabase está configurado corretamente.');
+                    } else if (e.name === 'TypeError' && e.message.includes('Load failed')) {
+                      alert('Erro de conexão com o banco de dados. Verifique:\n1. Conexão com internet\n2. Configuração do Supabase (supabase.ts)\n3. CORS no projeto Supabase');
+                    } else {
+                      alert(`Erro ao importar conteúdos: ${e.message || 'Erro desconhecido'}`);
+                    }
+                  }
+                }}
+                onUploadPDF={() => { }}
+                onDeleteTopic={handleDeleteTopic}
+                onSaveQuiz={handleSaveQuiz}
+              />
+            )}
+            {activeTab === 'schedule' && (
+              <Schedule
+                schedule={scheduleData}
+                subjects={subjectsState}
+                onUpdate={async (entry) => {
+                  // Optimistic Update
+                  setScheduleData(prev => prev.map(s => s.id === entry.id ? entry : s));
+
+                  try {
+                    const { error } = await supabase.from('schedule').update({
+                      day: entry.day,
+                      period: entry.period,
+                      subject_id: entry.subjectId,
+                      front: entry.front,
+                      user_id: currentUser?.id
+                    }).eq('id', entry.id);
+
+                    if (error) console.error("Erro ao atualizar horário:", error);
+                  } catch (err) { console.error("Erro de rede:", err); }
+                }}
+                onAdd={async (entry) => {
+                  // Optimistic Update
+                  setScheduleData(prev => [...prev, entry]);
+
+                  try {
+                    const { error } = await supabase.from('schedule').insert({
+                      id: entry.id,
+                      day: entry.day,
+                      period: entry.period,
+                      subject_id: entry.subjectId,
+                      front: entry.front,
+                      user_id: currentUser?.id
+                    });
+
+                    if (error) console.error("Erro ao adicionar horário:", error);
+                  } catch (err) { console.error("Erro de rede:", err); }
+                }}
+                onDelete={(id) => setDeletingItem({ id, type: 'schedule' })}
+                onUpdateSubjectColor={async (subjectId, color) => {
+                  // Optimistic Update
+                  setSubjectsState(prev => prev.map(s => s.id === subjectId ? { ...s, color } : s));
+
+                  try {
+                    const { error } = await supabase.from('subjects').update({ color }).eq('id', subjectId);
+
+                    if (error) console.error("Erro ao atualizar cor:", error);
+                  } catch (err) { console.error("Erro de rede:", err); }
+                }}
+              />
+            )}
+            {activeTab === 'exams' && (
+              <ExamsPanel
+                topics={filteredTopics}
+                exams={examsData}
+                subjects={subjectsState}
+                quizzes={quizzes}
+                studentProgress={studentProgress}
+                currentUser={currentUser}
+                onUpdateExam={handleUpdateExam}
+                onDeleteExam={handleDeleteExam}
+              />
+            )}
+            {activeTab === 'estagio' && (
+              <Internships
+                internships={internships.filter(i => {
+                  // Client-side filtering strategy
+                  // 1. Optimistic / Direct Ownership check
+                  if ((i as any).uid === currentUser?.id) return true;
+                  if ((i as any).user_id && (i as any).user_id === currentUser?.id) return true;
+
+                  if (i.evolutionModel && i.evolutionModel.startsWith('{"p":true')) {
+                    try {
+                      const p = JSON.parse(i.evolutionModel);
+                      return p.uid === currentUser?.id;
+                    } catch { return false; }
+                  }
+                  // Legacy with no owner info: HIDE to prevent sharing.
+                  return false;
+                })}
+                onAdd={async (internship) => {
+                  // OPTIMISTIC UPDATE: Add to UI immediately
+                  // We add the 'uid' to the local object so it passes the ownership filter
+                  const optimisticInternship = { ...internship, uid: currentUser?.id };
+                  setInternships(prev => [...prev, optimisticInternship]);
+
+                  // DATA PACKING STRATEGY:
+                  // Pack s (schedule), l (location), uid (userID) into evolution_model
+                  const packedData = {
+                    p: true, // flag
+                    s: internship.schedule,
+                    l: internship.location,
+                    em: internship.evolutionModel,
+                    uid: currentUser?.id // Store ownership here
+                  };
+
+                  const dbPayload = {
+                    id: internship.id,
+                    title: internship.title,
+                    local: internship.local,
+                    evolution_model: JSON.stringify(packedData),
+                    status: internship.status
+                  };
+
+                  try {
+                    const { error, data } = await supabase.from('internships').insert(dbPayload).select();
+                    if (error) {
+                      console.error("❌ ERRO ao salvar estágio no banco:", error);
+                      console.error("Payload que falhou:", dbPayload);
+                      // ROLLBACK: Remove from UI since DB insert failed
+                      setInternships(prev => prev.filter(i => i.id !== internship.id));
+                      alert(`Erro ao salvar estágio: ${error.message}`);
+                    } else {
+                      console.log("✅ Estágio salvo com sucesso:", data);
+                    }
+                  } catch (err) {
+                    console.error("❌ Erro de rede/Fetch ao salvar estágio:", err);
+                    // ROLLBACK: Remove from UI since network failed
                     setInternships(prev => prev.filter(i => i.id !== internship.id));
-                    alert(`Erro ao salvar estágio: ${error.message}`);
-                  } else {
-                    console.log("✅ Estágio salvo com sucesso:", data);
+                    alert('Erro de rede ao salvar estágio. Verifique sua conexão.');
                   }
-                } catch (err) {
-                  console.error("❌ Erro de rede/Fetch ao salvar estágio:", err);
-                  // ROLLBACK: Remove from UI since network failed
-                  setInternships(prev => prev.filter(i => i.id !== internship.id));
-                  alert('Erro de rede ao salvar estágio. Verifique sua conexão.');
-                }
-              }}
-              onUpdate={async (internship) => {
-                // OPTIMISTIC UPDATE
-                const optimisticInternship = { ...internship, uid: currentUser?.id };
-                setInternships(prev => prev.map(i => i.id === internship.id ? optimisticInternship : i));
+                }}
+                onUpdate={async (internship) => {
+                  // OPTIMISTIC UPDATE
+                  const optimisticInternship = { ...internship, uid: currentUser?.id };
+                  setInternships(prev => prev.map(i => i.id === internship.id ? optimisticInternship : i));
 
-                const packedData = {
-                  p: true,
-                  s: internship.schedule,
-                  l: internship.location,
-                  em: internship.evolutionModel,
-                  uid: currentUser?.id
-                };
+                  const packedData = {
+                    p: true,
+                    s: internship.schedule,
+                    l: internship.location,
+                    em: internship.evolutionModel,
+                    uid: currentUser?.id
+                  };
 
-                const dbPayload = {
-                  title: internship.title,
-                  local: internship.local,
-                  evolution_model: JSON.stringify(packedData),
-                  status: internship.status
-                };
+                  const dbPayload = {
+                    title: internship.title,
+                    local: internship.local,
+                    evolution_model: JSON.stringify(packedData),
+                    status: internship.status
+                  };
 
-                try {
-                  const { error } = await supabase.from('internships').update(dbPayload).eq('id', internship.id);
-                  if (error) {
-                    console.error("Erro ao atualizar banco:", error);
+                  try {
+                    const { error } = await supabase.from('internships').update(dbPayload).eq('id', internship.id);
+                    if (error) {
+                      console.error("Erro ao atualizar banco:", error);
+                    }
+                  } catch (err) {
+                    console.error("Erro de rede ao atualizar:", err);
                   }
-                } catch (err) {
-                  console.error("Erro de rede ao atualizar:", err);
-                }
-              }}
-              onDelete={(id) => setDeletingItem({ id, type: 'internship' })}
-            />
-          )}
-          {activeTab === 'quiz' && <QuizGenerator onSaveQuiz={handleSaveQuiz} history={quizHistory} currentUser={currentUser} quizzes={quizzes} />}
-          {activeTab === 'profile' && (
-            <UserProfile
-              currentUser={currentUser}
-              onUpdateUser={handleUpdateUser}
-            />
-          )}
-          {activeTab === 'grades' && <GradesPanel subjects={subjectsState} grades={grades} onUpdate={handleUpdateGrades} />}
-          {activeTab === 'users' && (
-            <UserManagement
-              users={users}
-              subjects={subjectsState}
-              onUpdateUser={handleUpdateUser}
-              onResetPassword={handleResetPassword}
-              onDeleteUser={(id) => setDeletingItem({ id, type: 'user' })}
-            />
-          )}
-        </div>
-      </main>
-      {/* Custom Delete Confirmation Modal */}
-      {/* Custom Delete Confirmation Modal */}
-      {deletingItem && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">
-              {deletingItem.type === 'schedule' ? 'Remover Horário?'
-                : deletingItem.type === 'internship' ? 'Remover Estágio?'
-                  : deletingItem.type === 'topic' ? 'Remover Conteúdo?'
-                    : deletingItem.type === 'exam' ? 'Excluir Prova?'
-                      : deletingItem.type === 'user' ? 'Deletar Usuário?'
-                        : 'Remover PDF?'}
-            </h3>
-            <p className="text-slate-500 mb-8">
-              {deletingItem.type === 'schedule'
-                ? 'Tem certeza que deseja remover este item do seu horário? Esta ação não pode ser desfeita.'
-                : deletingItem.type === 'internship'
-                  ? 'Tem certeza que deseja remover este estágio e todo seu histórico? Esta ação não pode ser desfeita.'
-                  : deletingItem.type === 'topic'
-                    ? 'Tem certeza que deseja excluir ESTE CONTEÚDO e todos os arquivos associados? Esta ação é irreversível.'
-                    : deletingItem.type === 'exam'
-                      ? 'Tem certeza que deseja excluir esta prova e todo o plano de estudo associado?'
-                      : deletingItem.type === 'user'
-                        ? 'Tem certeza que deseja DELETAR este usuário PERMANENTEMENTE? Ele perderá todo o acesso ao sistema.'
-                        : 'Tem certeza que deseja remover O ARQUIVO PDF anexado a este conteúdo?'}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeletingItem(null)}
-                className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-700 hover:bg-slate-100 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-rose-500 hover:bg-rose-600 shadow-lg shadow-rose-500/20 transition-all"
-              >
-                Sim, Remover
-              </button>
+                }}
+                onDelete={(id) => setDeletingItem({ id, type: 'internship' })}
+              />
+            )}
+            {activeTab === 'quiz' && <QuizGenerator onSaveQuiz={handleSaveQuiz} history={quizHistory} currentUser={currentUser} quizzes={quizzes} />}
+            {activeTab === 'profile' && (
+              <UserProfile
+                currentUser={currentUser}
+                onUpdateUser={handleUpdateUser}
+              />
+            )}
+            {activeTab === 'grades' && <GradesPanel subjects={subjectsState} grades={grades} onUpdate={handleUpdateGrades} />}
+            {activeTab === 'study' && <StudyReports />}
+            {activeTab === 'admin' && currentUser?.role === 'admin' && <AdminPanel />}
+            {activeTab === 'users' && (
+              <UserManagement
+                users={users}
+                subjects={subjectsState}
+                onUpdateUser={handleUpdateUser}
+                onResetPassword={handleResetPassword}
+                onDeleteUser={(id) => setDeletingItem({ id, type: 'user' })}
+              />
+            )}
+          </div>
+        </main>
+        {/* Custom Delete Confirmation Modal */}
+        {/* Custom Delete Confirmation Modal */}
+        {deletingItem && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full animate-in zoom-in-95 duration-200">
+              <h3 className="text-xl font-bold text-slate-900 mb-2">
+                {deletingItem.type === 'schedule' ? 'Remover Horário?'
+                  : deletingItem.type === 'internship' ? 'Remover Estágio?'
+                    : deletingItem.type === 'topic' ? 'Remover Conteúdo?'
+                      : deletingItem.type === 'exam' ? 'Excluir Prova?'
+                        : deletingItem.type === 'user' ? 'Deletar Usuário?'
+                          : 'Remover PDF?'}
+              </h3>
+              <p className="text-slate-500 mb-8">
+                {deletingItem.type === 'schedule'
+                  ? 'Tem certeza que deseja remover este item do seu horário? Esta ação não pode ser desfeita.'
+                  : deletingItem.type === 'internship'
+                    ? 'Tem certeza que deseja remover este estágio e todo seu histórico? Esta ação não pode ser desfeita.'
+                    : deletingItem.type === 'topic'
+                      ? 'Tem certeza que deseja excluir ESTE CONTEÚDO e todos os arquivos associados? Esta ação é irreversível.'
+                      : deletingItem.type === 'exam'
+                        ? 'Tem certeza que deseja excluir esta prova e todo o plano de estudo associado?'
+                        : deletingItem.type === 'user'
+                          ? 'Tem certeza que deseja DELETAR este usuário PERMANENTEMENTE? Ele perderá todo o acesso ao sistema.'
+                          : 'Tem certeza que deseja remover O ARQUIVO PDF anexado a este conteúdo?'}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeletingItem(null)}
+                  className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-rose-500 hover:bg-rose-600 shadow-lg shadow-rose-500/20 transition-all"
+                >
+                  Sim, Remover
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </PomodoroProvider>
   );
 };
 

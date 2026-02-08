@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Calendar, BookOpen, GraduationCap, Settings, User, MapPin, BrainCircuit, Users, LogOut, FileSpreadsheet } from 'lucide-react';
+import { LayoutDashboard, Calendar, BookOpen, GraduationCap, Settings, User, MapPin, BrainCircuit, Users, LogOut, FileSpreadsheet, BarChart3, Timer } from 'lucide-react';
 import { User as UserType } from '../types';
 
 interface SidebarProps {
@@ -21,9 +21,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, curre
     { id: 'quiz', label: 'Simulados IA', icon: BrainCircuit },
     { id: 'exams', label: 'Calendário de Provas', icon: GraduationCap },
     { id: 'grades', label: 'Minhas Notas', icon: FileSpreadsheet },
+    { id: 'study', label: 'Estudo Pomodoro', icon: Timer },
   ];
 
   if (currentUser?.role === 'admin') {
+    menuItems.push({ id: 'admin', label: 'Analytics', icon: BarChart3 });
     menuItems.push({ id: 'users', label: 'Gerenciamento', icon: Users });
   }
 
