@@ -1,8 +1,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Topic, Subject, StudentProgress, ScheduleEntry, User, Exam, Quiz, ContentStatus, ExamTag } from '../types';
-import { Filter, ArrowRight } from 'lucide-react';
+import { Filter, ArrowRight, X, BookOpen } from 'lucide-react';
 import { useActivityTracker } from '../hooks/useActivityTracker';
+import { Watermark } from './Watermark';
 
 interface DashboardProps {
   topics: Topic[];
@@ -131,6 +132,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [showStudyPlan, setShowStudyPlan] = useState(false);
   // const [subjectFilter, setSubjectFilter] = useState<string>('all');
   // const [tagFilter, setTagFilter] = useState<ExamTag | 'all'>('all');
+  const [viewingPdf, setViewingPdf] = useState<{ url: string; title: string } | null>(null);
 
   useEffect(() => {
     trackPageView();
@@ -365,7 +367,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <div className="flex flex-col items-end">
                       <button
                         onClick={() => {
-                          if (topic.pdfUrl) window.open(topic.pdfUrl, '_blank');
+                          if (topic.pdfUrl) {
+                            setViewingPdf({ url: topic.pdfUrl, title: topic.title });
+                          }
                         }}
                         className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-all"
                       >
@@ -411,7 +415,43 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </button>
         </div>
       </div>
-    </div>
+
+
+      {/* PDF Viewer Modal with Watermark */}
+      {
+        viewingPdf && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white w-full h-full max-w-6xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col relative">
+              <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-white z-20">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <BookOpen size={18} className="text-blue-600" />
+                  {viewingPdf.title}
+                </h3>
+                <button
+                  onClick={() => setViewingPdf(null)}
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 relative bg-slate-100 overflow-hidden">
+                <iframe
+                  src={viewingPdf.url}
+                  className="w-full h-full"
+                  title="PDF Viewer"
+                />
+                {currentUser && (
+                  <div className="absolute inset-0 pointer-events-none z-10" style={{ pointerEvents: 'none' }}>
+                    <Watermark user={currentUser} />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </div >
 
   );
 };
