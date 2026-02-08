@@ -1,7 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Topic, Subject, StudentProgress, ScheduleEntry, User, Exam, Quiz, ContentStatus, ExamTag } from '../types';
 import { Filter, ArrowRight } from 'lucide-react';
+import { useActivityTracker } from '../hooks/useActivityTracker';
 
 interface DashboardProps {
   topics: Topic[];
@@ -115,6 +116,7 @@ const MultiColorCircularMetric = ({
   );
 };
 
+
 export const Dashboard: React.FC<DashboardProps> = ({
   topics,
   subjects,
@@ -125,19 +127,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
   currentUser,
   setActiveTab
 }) => {
+  const { trackPageView } = useActivityTracker('dashboard', currentUser?.id);
   const [showStudyPlan, setShowStudyPlan] = useState(false);
-  const [subjectFilter, setSubjectFilter] = useState<string>('all');
-  const [tagFilter, setTagFilter] = useState<ExamTag | 'all'>('all');
+  // const [subjectFilter, setSubjectFilter] = useState<string>('all');
+  // const [tagFilter, setTagFilter] = useState<ExamTag | 'all'>('all');
 
-  const filteredTopicsList = useMemo(() => {
+  useEffect(() => {
+    trackPageView();
+  }, [trackPageView]);
+
+  const latestSummaries = useMemo(() => {
     return topics
-      .filter(t => {
-        const matchSubject = subjectFilter === 'all' || t.subjectId === subjectFilter;
-        const matchTag = tagFilter === 'all' || t.tag === tagFilter;
-        return matchSubject && matchTag;
+      .filter(t => t.hasMedia || t.pdfUrl)
+      .sort((a, b) => {
+        // Sort by createdAt descending (newest first)
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
       })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [topics, subjectFilter, tagFilter]);
+      .slice(0, 5);
+  }, [topics]);
 
   const getDistribution = (topicList: Topic[]): Segment[] => {
     const totalCount = topicList.length;
@@ -321,111 +330,88 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      <div className="space-y-6">
-        <div className="flex flex-col md:flex-row items-center gap-4 bg-white p-5 rounded-3xl border shadow-sm">
-          <div className="flex items-center gap-2 text-slate-400 mr-2">
-            <Filter size={20} />
-            <span className="text-xs font-black uppercase tracking-[0.2em]">Filtros Rápidos</span>
-          </div>
-          <select
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
-            value={subjectFilter}
-            onChange={(e) => setSubjectFilter(e.target.value)}
-          >
-            <option value="all">Todas as Disciplinas</option>
-            {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <select
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
-            value={tagFilter}
-            onChange={(e) => setTagFilter(e.target.value as any)}
-          >
-            <option value="all">Todo o Período</option>
-            <option value={ExamTag.PR1}>Foco PR1 (Conteúdo Inicial)</option>
-            <option value={ExamTag.PR2}>Foco PR2 (Conteúdo Avançado)</option>
-            <option value={ExamTag.SUB}>Segunda Chamada</option>
-            <option value={ExamTag.FINAL}>Prova Final</option>
-          </select>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 bg-white rounded-3xl border shadow-sm p-8">
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h3 className="text-xl font-bold text-slate-900">Conteúdos Ativos</h3>
-                <p className="text-xs text-slate-400 mt-1">Itens correspondentes aos filtros selecionados</p>
-              </div>
-              <button
-                onClick={() => setActiveTab('syllabus')}
-                className="group flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all"
-              >
-                Gerenciar <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-              </button>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 bg-white rounded-3xl border shadow-sm p-8">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h3 className="text-xl font-bold text-slate-900">Últimos Resumos Adicionados</h3>
+              <p className="text-xs text-slate-400 mt-1">Materiais mais recentes com PDF/Mídia</p>
             </div>
-            <div className="space-y-4">
-              {filteredTopicsList.length > 0 ? (
-                filteredTopicsList.slice(0, 8).map(topic => {
-                  const subject = subjects.find(s => s.id === topic.subjectId);
-                  return (
-                    <div key={topic.id} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-100 hover:border-blue-200 hover:shadow-sm transition-all group">
-                      <div className="flex items-center gap-4">
-                        <div className="w-3 h-12 rounded-full shadow-sm" style={{ backgroundColor: COLOR_MAP[subject?.color || 'slate'] }}></div>
-                        <div>
-                          <p className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{topic.title}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">{subject?.name}</span>
-                            <span className="text-[10px] text-slate-300 font-black px-2 py-0.5 border rounded-md">{topic.tag}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <span className={`text-[10px] font-black px-4 py-1.5 rounded-full border shadow-sm uppercase tracking-wider ${topic.status === ContentStatus.REVISADO ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                          topic.status === ContentStatus.PENDENTE ? 'bg-rose-50 text-rose-700 border-rose-100' :
-                            'bg-blue-50 text-blue-700 border-blue-100'
-                          }`}>
-                          {topic.status}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-16 bg-slate-50/50 rounded-3xl border border-dashed">
-                  <p className="text-slate-400 font-medium text-sm italic">Nenhum assunto encontrado para estes filtros.</p>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="space-y-6">
-            <div className="bg-[#0F172A] text-white rounded-3xl shadow-xl p-8 flex flex-col gap-6">
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold">Distribuição Acadêmica</h3>
-                <p className="text-slate-400 text-xs leading-relaxed">Carga de temas mapeados por disciplina no período.</p>
-              </div>
-              <div className="space-y-4">
-                {subjects.map(s => {
-                  const count = topics.filter(t => t.subjectId === s.id).length;
-                  const percent = topics.length > 0 ? (count / topics.length) * 100 : 0;
-                  return (
-                    <div key={s.id} className="space-y-1.5 group cursor-help">
-                      <div className="flex justify-between text-[11px] font-bold">
-                        <span className="text-slate-300 uppercase tracking-widest group-hover:text-white transition-colors">{s.name}</span>
-                        <span className="text-white">{count} temas</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                        <div className="h-full transition-all duration-700 group-hover:brightness-125" style={{ width: `${percent}%`, backgroundColor: COLOR_MAP[s.color] }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <button onClick={() => setActiveTab('schedule')} className="w-full bg-white text-slate-900 border border-slate-200 hover:border-blue-600 hover:text-blue-600 py-4 rounded-3xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2">
-              Ver Horário Acadêmico
+            <button
+              onClick={() => setActiveTab('syllabus')}
+              className="group flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all"
+            >
+              Ver Todos <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
+          <div className="space-y-4">
+            {latestSummaries.length > 0 ? (
+              latestSummaries.map(topic => {
+                const subject = subjects.find(s => s.id === topic.subjectId);
+                return (
+                  <div key={topic.id} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-100 hover:border-blue-200 hover:shadow-sm transition-all group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-3 h-12 rounded-full shadow-sm" style={{ backgroundColor: COLOR_MAP[subject?.color || 'slate'] }}></div>
+                      <div>
+                        <p className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{topic.title}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">{subject?.name}</span>
+                          <span className="text-[10px] text-slate-300 font-black px-2 py-0.5 border rounded-md">RESUMO</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <button
+                        onClick={() => {
+                          if (topic.pdfUrl) window.open(topic.pdfUrl, '_blank');
+                        }}
+                        className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-all"
+                      >
+                        Ler Resumo
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-16 bg-slate-50/50 rounded-3xl border border-dashed">
+                <p className="text-slate-400 font-medium text-sm italic">Nenhum resumo adicionado recentemente.</p>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="space-y-6">
+          <div className="bg-[#0F172A] text-white rounded-3xl shadow-xl p-8 flex flex-col gap-6">
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold">Distribuição Acadêmica</h3>
+              <p className="text-slate-400 text-xs leading-relaxed">Carga de temas mapeados por disciplina no período.</p>
+            </div>
+            <div className="space-y-4">
+              {subjects.map(s => {
+                const count = topics.filter(t => t.subjectId === s.id).length;
+                const percent = topics.length > 0 ? (count / topics.length) * 100 : 0;
+                return (
+                  <div key={s.id} className="space-y-1.5 group cursor-help">
+                    <div className="flex justify-between text-[11px] font-bold">
+                      <span className="text-slate-300 uppercase tracking-widest group-hover:text-white transition-colors">{s.name}</span>
+                      <span className="text-white">{count} temas</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div className="h-full transition-all duration-700 group-hover:brightness-125" style={{ width: `${percent}%`, backgroundColor: COLOR_MAP[s.color] }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <button onClick={() => setActiveTab('schedule')} className="w-full bg-white text-slate-900 border border-slate-200 hover:border-blue-600 hover:text-blue-600 py-4 rounded-3xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2">
+            Ver Horário Acadêmico
+          </button>
         </div>
       </div>
     </div>
+
   );
 };

@@ -28,6 +28,7 @@ export interface Topic {
   pdfUrl?: string;
   pdfSummary?: string;
   shift?: Period;
+  createdAt?: string; // ISO string for creation date
 }
 
 export interface Subject {

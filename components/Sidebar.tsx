@@ -3,6 +3,8 @@ import React from 'react';
 import { LayoutDashboard, Calendar, BookOpen, GraduationCap, Settings, User, MapPin, BrainCircuit, Users, LogOut, FileSpreadsheet, BarChart3, Timer } from 'lucide-react';
 import { User as UserType } from '../types';
 
+import { useActivityTracker } from '../hooks/useActivityTracker';
+
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: any) => void;
@@ -13,6 +15,8 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, currentUser, onLogout, isOpen, onClose }) => {
+  const { trackButtonClick } = useActivityTracker('navigation', currentUser?.id);
+
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'schedule', label: 'Horário Acadêmico', icon: Calendar },
@@ -51,7 +55,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, curre
           {menuItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => { setActiveTab(item.id); onClose(); }}
+              onClick={() => {
+                setActiveTab(item.id);
+                onClose();
+                trackButtonClick(item.id);
+              }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === item.id
                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'

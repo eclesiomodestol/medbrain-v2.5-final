@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.39.0",
-    "@supabase/supabase-js": "^2.48.1",
+    "@supabase/supabase-js": "^2.95.3",
     "date-fns": "^4.1.0",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",

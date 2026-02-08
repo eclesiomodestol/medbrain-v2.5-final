@@ -13,13 +13,40 @@ interface UserManagementProps {
 }
 
 export const UserManagement: React.FC<UserManagementProps> = ({ users, subjects, onUpdateUser, onImpersonate, onDeleteUser, onResetPassword }) => {
+  // Define subspecialties mapping (same as App.tsx)
+  const SUBJECT_SUBSPECIALTIES: Record<string, string[]> = {
+    'cm3': ['Neurologia', 'Hematologia', 'Dermatologia'],
+    'cc3': ['Otorrino', 'Ortopedia', 'Oftalmo']
+  };
+
   const toggleSubject = (user: User, subjectId: string) => {
     let current = user.accessibleSubjects === 'all' ? subjects.map(s => s.id) : user.accessibleSubjects;
 
-    if (current.includes(subjectId)) {
-      current = current.filter(id => id !== subjectId);
+    // Check if toggling a main subject
+    if (subjects.map(s => s.id).includes(subjectId)) {
+      if (current.includes(subjectId)) {
+        // Removing main subject: also remove its subspecialties if any were added individually
+        current = current.filter(id => id !== subjectId);
+        const subs = SUBJECT_SUBSPECIALTIES[subjectId];
+        if (subs) {
+          current = current.filter(id => !subs.includes(id));
+        }
+      } else {
+        // Adding main subject
+        current = [...current, subjectId];
+        // Optional: remove individual subspecialties since main subject covers all
+        const subs = SUBJECT_SUBSPECIALTIES[subjectId];
+        if (subs) {
+          current = current.filter(id => !subs.includes(id));
+        }
+      }
     } else {
-      current = [...current, subjectId];
+      // Toggling a subspecialty
+      if (current.includes(subjectId)) {
+        current = current.filter(id => id !== subjectId);
+      } else {
+        current = [...current, subjectId];
+      }
     }
 
     onUpdateUser(user.id, { accessibleSubjects: current });
@@ -69,8 +96,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, subjects,
                 </td>
                 <td className="px-8 py-6">
                   <span className={`text-[10px] font-black px-3 py-1.5 rounded-full border uppercase tracking-widest ${user.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                      user.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                        'bg-rose-50 text-rose-600 border-rose-100'
+                    user.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                      'bg-rose-50 text-rose-600 border-rose-100'
                     }`}>
                     {user.status === 'active' ? 'Ativo' : user.status === 'pending' ? 'Pendente' : 'Bloqueado'}
                   </span>
@@ -88,15 +115,39 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, subjects,
                       </button>
                       {subjects.map(sub => {
                         const hasAccess = user.accessibleSubjects === 'all' || user.accessibleSubjects.includes(sub.id);
+                        const subspecialties = SUBJECT_SUBSPECIALTIES[sub.id];
+
                         return (
-                          <button
-                            key={sub.id}
-                            onClick={() => toggleSubject(user, sub.id)}
-                            className={`text-[9px] font-black px-2 py-1 rounded-md border transition-all ${hasAccess ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-slate-300 border-slate-100'
-                              }`}
-                          >
-                            {getSubjectLabel(sub)}
-                          </button>
+                          <div key={sub.id} className="flex flex-col gap-1 items-start">
+                            <button
+                              onClick={() => toggleSubject(user, sub.id)}
+                              className={`text-[9px] font-black px-2 py-1 rounded-md border transition-all ${hasAccess ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-slate-300 border-slate-100'
+                                }`}
+                            >
+                              {getSubjectLabel(sub)}
+                            </button>
+
+                            {/* Subspecialties Toggles */}
+                            {subspecialties && !hasAccess && (
+                              <div className="flex flex-wrap gap-1 ml-2 border-l-2 border-slate-100 pl-2">
+                                {subspecialties.map(spec => {
+                                  const hasSpecAccess = user.accessibleSubjects !== 'all' && user.accessibleSubjects.includes(spec);
+                                  return (
+                                    <button
+                                      key={spec}
+                                      onClick={() => toggleSubject(user, spec)}
+                                      className={`text-[8px] font-bold px-1.5 py-0.5 rounded border transition-all ${hasSpecAccess
+                                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                          : 'bg-white text-slate-300 border-slate-100'
+                                        }`}
+                                    >
+                                      {spec}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
                     </div>

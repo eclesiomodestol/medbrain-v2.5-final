@@ -4,18 +4,16 @@ import { generateDeviceFingerprint, getDeviceInfo } from '../utils/deviceFingerp
 
 let currentSessionId: string | null = null;
 
-export const useSessionManager = () => {
+export const useSessionManager = (userId: string | undefined) => {
     const sessionStarted = useRef(false);
     const activityInterval = useRef<NodeJS.Timeout | null>(null);
 
     // Inicia uma nova sessão
     const startSession = async () => {
+        if (!userId) return null;
         if (sessionStarted.current) return currentSessionId;
 
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return null;
-
             const fingerprint = generateDeviceFingerprint();
             const deviceInfo = getDeviceInfo();
 
@@ -23,7 +21,7 @@ export const useSessionManager = () => {
             const { data, error } = await supabase
                 .from('user_sessions')
                 .insert({
-                    user_id: user.id,
+                    user_id: userId,
                     device_fingerprint: fingerprint,
                     device_info: deviceInfo
                 })
@@ -93,12 +91,14 @@ export const useSessionManager = () => {
     };
 
     useEffect(() => {
-        startSession();
+        if (userId) {
+            startSession();
+        }
 
         return () => {
             endSession();
         };
-    }, []);
+    }, [userId]);
 
     return {
         sessionId: currentSessionId,

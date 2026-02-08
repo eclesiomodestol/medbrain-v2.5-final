@@ -2,17 +2,16 @@ import { useCallback } from 'react';
 import { supabase } from '../supabase';
 import { getCurrentSessionId } from './useSessionManager';
 
-export const useActivityTracker = (module: string) => {
+export const useActivityTracker = (module: string, userId?: string) => {
     // Rastreia uma ação genérica
     const trackAction = useCallback(async (actionType: string, details?: any) => {
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+        if (!userId) return;
 
+        try {
             const sessionId = getCurrentSessionId();
 
             await supabase.from('activity_logs').insert({
-                user_id: user.id,
+                user_id: userId,
                 session_id: sessionId,
                 action_type: actionType,
                 module: module,
@@ -21,7 +20,7 @@ export const useActivityTracker = (module: string) => {
         } catch (error) {
             console.error('Error tracking action:', error);
         }
-    }, [module]);
+    }, [module, userId]);
 
     // Rastreia visualização de página
     const trackPageView = useCallback(async () => {
@@ -40,10 +39,9 @@ export const useActivityTracker = (module: string) => {
 
     // Rastreia download
     const trackDownload = useCallback(async (fileType: string, fileName?: string) => {
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+        if (!userId) return;
 
+        try {
             const sessionId = getCurrentSessionId();
 
             // Registra no activity_logs
@@ -51,7 +49,7 @@ export const useActivityTracker = (module: string) => {
 
             // Registra também no download_logs
             await supabase.from('download_logs').insert({
-                user_id: user.id,
+                user_id: userId,
                 session_id: sessionId,
                 file_type: fileType,
                 file_name: fileName,
@@ -60,7 +58,7 @@ export const useActivityTracker = (module: string) => {
         } catch (error) {
             console.error('Error tracking download:', error);
         }
-    }, [module, trackAction]);
+    }, [module, userId, trackAction]);
 
     return {
         trackAction,

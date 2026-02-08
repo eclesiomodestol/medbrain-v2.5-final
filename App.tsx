@@ -42,7 +42,7 @@ const App: React.FC = () => {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
 
   // Initialize session tracking
-  useSessionManager();
+  useSessionManager(currentUser?.id);
 
   const fetchAllData = async () => {
     if (!currentUser) return;
@@ -83,7 +83,8 @@ const App: React.FC = () => {
           subjectId: t.subject_id,
           hasMedia: t.has_media,
           pdfUrl: t.pdf_url,
-          pdfSummary: t.pdf_summary
+          pdfSummary: t.pdf_summary,
+          createdAt: t.created_at
         })));
       }
       if (sched) setScheduleData(sched.map(s => ({ ...s, subjectId: s.subject_id })));
@@ -190,14 +191,38 @@ const App: React.FC = () => {
     setCurrentUser(user);
   };
 
-  const isAccessible = useCallback((subjectId: string) => {
+
+  // Define subspecialties mapping
+  const SUBJECT_SUBSPECIALTIES: Record<string, string[]> = useMemo(() => ({
+    'cm3': ['Neurologia', 'Hematologia', 'Dermatologia'],
+    'cc3': ['Otorrino', 'Ortopedia', 'Oftalmo']
+  }), []);
+
+  const isAccessible = useCallback((subjectId: string, front?: string) => {
     if (!currentUser) return false;
     if (currentUser.role === 'admin') return true;
     if (currentUser.accessibleSubjects === 'all') return true;
-    return Array.isArray(currentUser.accessibleSubjects) && currentUser.accessibleSubjects.includes(subjectId);
-  }, [currentUser]);
 
-  const filteredTopics = useMemo(() => topics.filter(t => isAccessible(t.subjectId)), [topics, isAccessible]);
+    if (Array.isArray(currentUser.accessibleSubjects)) {
+      // Check if user has full access to the subject
+      if (currentUser.accessibleSubjects.includes(subjectId)) return true;
+
+      // Check if user has access to the specific subspecialty
+      if (front && currentUser.accessibleSubjects.includes(front)) return true;
+
+      // Special case for Sidebar/Navigation visibility:
+      // If we are just checking subject access (no front specified), 
+      // allow if user has access to AT LEAST ONE subspecialty of this subject
+      if (!front) {
+        const subs = SUBJECT_SUBSPECIALTIES[subjectId];
+        if (subs && subs.some(s => currentUser.accessibleSubjects.includes(s))) return true;
+      }
+    }
+
+    return false;
+  }, [currentUser, SUBJECT_SUBSPECIALTIES]);
+
+  const filteredTopics = useMemo(() => topics.filter(t => isAccessible(t.subjectId, t.front)), [topics, isAccessible]);
 
   const uploadPDF = useCallback(async (topicId: string, file: File, summary: string) => {
     const fileName = `med_${topicId}_${Date.now()}.pdf`;
@@ -556,7 +581,14 @@ const App: React.FC = () => {
         />
 
         {/* Floating Pomodoro Timer */}
-        <PomodoroTimer subjects={subjectsState.map(s => ({ id: s.id, name: s.name }))} />
+        <PomodoroTimer subjects={[
+          { id: 'neurologia', name: 'Neurologia' },
+          { id: 'hematologia', name: 'Hematologia' },
+          { id: 'dermatologia', name: 'Dermatologia' },
+          { id: 'otorrino', name: 'Otorrino' },
+          { id: 'ortopedia', name: 'Ortopedia' },
+          { id: 'oftalmo', name: 'Oftalmo' }
+        ]} />
 
         <main className="flex-1 p-4 lg:p-8 lg:ml-64 overflow-y-auto">
           <header className="mb-8 flex items-center justify-between">
