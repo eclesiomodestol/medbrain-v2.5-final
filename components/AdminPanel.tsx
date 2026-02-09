@@ -39,6 +39,17 @@ interface ConcurrentSession {
     devices: string[];
 }
 
+interface AccessLog {
+    id: string;
+    user_id: string;
+    user_email?: string; // Derived from user_id if possible or join
+    started_at: string;
+    device_info: any;
+    ip_address?: string;
+    is_active: boolean;
+    last_activity: string;
+}
+
 export const AdminPanel: React.FC = () => {
     const [stats, setStats] = useState<AnalyticsStats>({
         totalUsers: 0,
@@ -55,6 +66,7 @@ export const AdminPanel: React.FC = () => {
     const [downloadStats, setDownloadStats] = useState<DownloadStats[]>([]);
     const [deviceStats, setDeviceStats] = useState<DeviceStats[]>([]);
     const [concurrentSessions, setConcurrentSessions] = useState<ConcurrentSession[]>([]);
+    const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -71,7 +83,9 @@ export const AdminPanel: React.FC = () => {
                 fetchModuleUsage(),
                 fetchDownloadStats(),
                 fetchDeviceStats(),
-                fetchConcurrentSessions()
+                fetchDeviceStats(),
+                fetchConcurrentSessions(),
+                fetchAccessLogs()
             ]);
             setLoading(false);
         } catch (error) {
@@ -246,6 +260,33 @@ export const AdminPanel: React.FC = () => {
             }));
 
         setConcurrentSessions(concurrent);
+    };
+
+    const fetchAccessLogs = async () => {
+        // Fetch recent sessions
+        const { data: sessions } = await supabase
+            .from('user_sessions')
+            .select('*')
+            .order('started_at', { ascending: false })
+            .limit(50);
+
+        if (!sessions) return;
+
+        // Try to enrich with user email if available in public users table 
+        // OR simply display the ID if that's what we have.
+        // Assuming we have a public users table or we can't get emails easily without admin rights on auth.
+
+        // Let's force a fetch of users 
+        const { data: users } = await supabase.from('users').select('id, email, name');
+        const userMap = new Map(users?.map(u => [u.id, u]) || []);
+
+        const enrichedLogs = sessions.map(session => ({
+            ...session,
+            user_email: userMap.get(session.user_id)?.email || session.user_id,
+            user_name: userMap.get(session.user_id)?.name || 'Unknown'
+        }));
+
+        setAccessLogs(enrichedLogs);
     };
 
     const getModuleIcon = (module: string) => {
@@ -452,7 +493,73 @@ export const AdminPanel: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            {/* Access Logs Table - DETAILED VIEW REQUESTED BY USER */}
+            <div className="bg-white rounded-[40px] border shadow-sm p-8">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="p-3 bg-slate-100 rounded-2xl">
+                        <Clock className="text-slate-600" size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-black text-slate-900 uppercase">Logs de Acesso Detalhados</h2>
+                        <p className="text-xs text-slate-600 font-medium">Últimos 50 acessos registrados</p>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="text-xs font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                                <th className="p-4">Data/Hora</th>
+                                <th className="p-4">Usuário</th>
+                                <th className="p-4">IP</th>
+                                <th className="p-4">Dispositivo</th>
+                                <th className="p-4">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="text-sm">
+                            {accessLogs.map((log) => (
+                                <tr key={log.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                    <td className="p-4 font-bold text-slate-700">
+                                        {new Date(log.started_at).toLocaleString()}
+                                    </td>
+                                    <td className="p-4">
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-slate-900">
+                                                {/* @ts-ignore - user_name added in map */}
+                                                {log.user_name}
+                                            </span>
+                                            <span className="text-xs text-slate-500">
+                                                {log.user_email}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td className="p-4 font-mono text-xs text-slate-500 bg-slate-100/50 rounded-lg">
+                                        {log.ip_address || 'N/A'}
+                                    </td>
+                                    <td className="p-4 text-slate-600">
+                                        {log.device_info?.browser} on {log.device_info?.os}
+                                    </td>
+                                    <td className="p-4">
+                                        {log.is_active ? (
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                Online
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500">
+                                                Offline
+                                            </span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
+
     );
 };
 
