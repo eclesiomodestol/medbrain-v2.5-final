@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Topic, Subject, StudentProgress, ScheduleEntry, User, Exam, Quiz, ContentStatus, ExamTag } from '../types';
-import { Filter, ArrowRight, X, BookOpen } from 'lucide-react';
+import { Filter, ArrowRight, X, BookOpen, Loader2 } from 'lucide-react';
 import { useActivityTracker } from '../hooks/useActivityTracker';
 import { Watermark } from './Watermark';
+import { addWatermarkToPdf } from '../utils/pdfWatermark';
 
 interface DashboardProps {
   topics: Topic[];
@@ -133,6 +134,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // const [subjectFilter, setSubjectFilter] = useState<string>('all');
   // const [tagFilter, setTagFilter] = useState<ExamTag | 'all'>('all');
   const [viewingPdf, setViewingPdf] = useState<{ url: string; title: string } | null>(null);
+  const [isLoadingPdf, setIsLoadingPdf] = useState(false);
 
   useEffect(() => {
     trackPageView();
@@ -148,6 +150,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
         return dateB - dateA;
       })
       .slice(0, 5);
+  }, [topics]);
+
+  const summaryStats = useMemo(() => {
+    return {
+      inConstruction: topics.filter(t => t.status === ContentStatus.AULA_ASSISTIDA).length,
+      ready: topics.filter(t => t.hasMedia || t.pdfUrl).length
+    };
   }, [topics]);
 
   const getDistribution = (topicList: Topic[]): Segment[] => {
@@ -349,6 +358,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </button>
           </div>
           <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col items-center justify-center text-center">
+                <span className="text-2xl font-black text-slate-700">{summaryStats.inConstruction}</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Em Construção</span>
+              </div>
+              <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 flex flex-col items-center justify-center text-center">
+                <span className="text-2xl font-black text-indigo-600">{summaryStats.ready}</span>
+                <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mt-1">Resumos Prontos</span>
+              </div>
+            </div>
+
             {latestSummaries.length > 0 ? (
               latestSummaries.map(topic => {
                 const subject = subjects.find(s => s.id === topic.subjectId);
@@ -366,14 +386,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                     <div className="flex flex-col items-end">
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (topic.pdfUrl) {
-                            setViewingPdf({ url: topic.pdfUrl, title: topic.title });
+                            setIsLoadingPdf(true);
+                            setViewingPdf({ url: '', title: topic.title }); // Open modal in loading state
+                            try {
+                              const watermarkedUrl = await addWatermarkToPdf(topic.pdfUrl, currentUser);
+                              setViewingPdf({ url: watermarkedUrl, title: topic.title });
+                            } catch (e) {
+                              console.error("Failed to watermark PDF", e);
+                              // Fallback to original, but maybe alert? 
+                              // For now, fallback to original to allow access, despite security trade-off? 
+                              // Or better, just show original in the secure viewer (better than nothing).
+                              setViewingPdf({ url: topic.pdfUrl, title: topic.title });
+                            } finally {
+                              setIsLoadingPdf(false);
+                            }
                           }
                         }}
-                        className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-all"
+                        disabled={isLoadingPdf}
+                        className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-50"
                       >
-                        Ler Resumo
+                        {isLoadingPdf ? <Loader2 size={12} className="animate-spin" /> : 'Ler Resumo'}
                       </button>
                     </div>
                   </div>
@@ -435,12 +469,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </button>
               </div>
 
-              <div className="flex-1 relative bg-slate-100 overflow-hidden">
-                <iframe
-                  src={viewingPdf.url}
-                  className="w-full h-full"
-                  title="PDF Viewer"
-                />
+              <div className="flex-1 relative bg-slate-100 overflow-hidden flex items-center justify-center">
+                {isLoadingPdf || !viewingPdf.url ? (
+                  <div className="flex flex-col items-center gap-2 text-slate-400">
+                    <Loader2 size={32} className="animate-spin text-blue-600" />
+                    <span className="text-xs font-bold uppercase tracking-widest">Preparando Documento Seguro...</span>
+                  </div>
+                ) : (
+                  <iframe
+                    src={viewingPdf.url}
+                    className="w-full h-full"
+                    title="PDF Viewer"
+                  />
+                )}
                 {currentUser && (
                   <div className="absolute inset-0 pointer-events-none z-10" style={{ pointerEvents: 'none' }}>
                     <Watermark user={currentUser} />
