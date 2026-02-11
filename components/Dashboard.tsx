@@ -24,6 +24,15 @@ const COLOR_MAP: Record<string, string> = {
   amber: '#f59e0b',
   rose: '#f43f5e',
   slate: '#64748b',
+  purple: '#a855f7',
+  cyan: '#06b6d4',
+  teal: '#14b8a6',
+  orange: '#f97316',
+  lime: '#84cc16',
+  pink: '#ec4899',
+  fuchsia: '#d946ef',
+  sky: '#0ea5e9',
+  violet: '#8b5cf6',
 };
 
 interface Segment {
@@ -168,10 +177,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const sub = subjects.find(s => s.id === subId);
       return {
         subjectId: subId,
-        subjectName: sub?.name || 'Desconhecido',
+        subjectName: sub?.name || (subId ? subId.charAt(0).toUpperCase() + subId.slice(1) : 'Desconhecido'),
         count: count,
         percentage: (count / totalCount) * 100,
-        color: COLOR_MAP[sub?.color || 'slate']
+        color: COLOR_MAP[sub?.color || 'slate'] || COLOR_MAP['slate']
       };
     });
   };

@@ -783,6 +783,7 @@ const App: React.FC = () => {
                 subjects={subjectsState}
                 onUpdate={async (entry) => {
                   // Optimistic Update
+                  const previousSchedule = [...scheduleData];
                   setScheduleData(prev => prev.map(s => s.id === entry.id ? entry : s));
 
                   try {
@@ -794,8 +795,15 @@ const App: React.FC = () => {
                       user_id: currentUser?.id
                     }).eq('id', entry.id);
 
-                    if (error) console.error("Erro ao atualizar horário:", error);
-                  } catch (err) { console.error("Erro de rede:", err); }
+                    if (error) {
+                      throw error;
+                    }
+                  } catch (err: any) {
+                    console.error("Erro ao atualizar horário:", err);
+                    alert(`Erro ao salvar alteração: ${err.message || 'Erro de conexão'}`);
+                    // Rollback
+                    setScheduleData(previousSchedule);
+                  }
                 }}
                 onAdd={async (entry) => {
                   // Optimistic Update
@@ -811,8 +819,15 @@ const App: React.FC = () => {
                       user_id: currentUser?.id
                     });
 
-                    if (error) console.error("Erro ao adicionar horário:", error);
-                  } catch (err) { console.error("Erro de rede:", err); }
+                    if (error) {
+                      throw error;
+                    }
+                  } catch (err: any) {
+                    console.error("Erro ao adicionar horário:", err);
+                    alert(`Erro ao adicionar horário: ${err.message || 'Erro de conexão'}`);
+                    // Rollback
+                    setScheduleData(prev => prev.filter(s => s.id !== entry.id));
+                  }
                 }}
                 onDelete={(id) => setDeletingItem({ id, type: 'schedule' })}
                 onUpdateSubjectColor={async (subjectId, color) => {
