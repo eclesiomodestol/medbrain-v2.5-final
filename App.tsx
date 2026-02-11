@@ -581,7 +581,7 @@ const App: React.FC = () => {
         />
 
         {/* Floating Pomodoro Timer */}
-        <PomodoroTimer subjects={subjectsState} />
+        <PomodoroTimer subjects={subjectsState} subspecialties={SUBJECT_SUBSPECIALTIES} />
 
         <main className="flex-1 p-4 lg:p-8 lg:ml-64 overflow-y-auto">
           <header className="mb-8 flex items-center justify-between">

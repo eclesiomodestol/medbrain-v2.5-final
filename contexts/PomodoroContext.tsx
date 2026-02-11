@@ -18,13 +18,14 @@ interface PomodoroState {
     currentPhase: 'work' | 'short_break' | 'long_break' | 'idle';
     timeRemaining: number; // in seconds
     selectedSubject: string | null;
+    selectedFront: string | null; // Added front
     pomodorosCompleted: number;
     sessionId: string | null;
     settings: PomodoroSettings;
 }
 
 interface PomodoroContextType extends PomodoroState {
-    start: (subjectId: string) => Promise<void>;
+    start: (subjectId: string, front?: string) => Promise<void>; // Updated signature
     pause: () => void;
     resume: () => void;
     stop: () => Promise<void>;
@@ -61,6 +62,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         currentPhase: 'idle',
         timeRemaining: defaultSettings.workDuration * 60,
         selectedSubject: null,
+        selectedFront: null,
         pomodorosCompleted: 0,
         sessionId: null,
         settings: defaultSettings
@@ -150,23 +152,6 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Save state to localStorage on change
     useEffect(() => {
         if (state.isRunning || state.isPaused) {
-            localStorage.setItem('pomodoro_state', JSON.stringify({
-                ...state,
-                startedAt: startTimeRef.current,
-                // Ensure we persist initialTimeRemaining if it exists in previous state/storage
-                // actually we should store it in state if we want to persist it easily,
-                // but since it's not in the interface, we rely on start/resume to put it there.
-                // The issue: if we just dump `...state`, we lose `initialTimeRemaining` if it's not a property of state.
-                // Fix: Read it from current localStorage to preserve it? 
-                // Or better: Add it to state interface? No, let's keep interface clean.
-                // We'll trust that start/resume set it.
-                // But wait, `localStorage.setItem` in this effect OVERWRITES the one from `start`?
-                // YES. This is the bug. 
-                // If `start` writes `initialTimeRemaining`, and then this effect runs (due to state change),
-                // and writes `...state`, `initialTimeRemaining` is LOST if it's not in `state`.
-            }));
-
-            // To fix the overwrite issue:
             // We need to fetch the existing 'initialTimeRemaining' from LS and keep it.
             const existing = localStorage.getItem('pomodoro_state');
             let initialTimeRemaining = 0;
@@ -312,7 +297,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, []);
 
-    const start = useCallback(async (subjectId: string) => {
+    const start = useCallback(async (subjectId: string, front?: string) => {
         const { data: { user } } = await supabase.auth.getUser();
 
         let sessionId = null;
@@ -323,6 +308,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 .insert({
                     user_id: user.id,
                     subject_id: subjectId,
+                    front: front || null, // Insert front
                     status: 'in_progress',
                     started_at: new Date().toISOString()
                 })
@@ -341,13 +327,14 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         startTimeRef.current = now;
 
         setState(prev => {
-            const newState = {
+            const newState: PomodoroState = {
                 ...prev,
                 isRunning: true,
                 isPaused: false,
                 currentPhase: 'work',
                 timeRemaining: initialTime,
                 selectedSubject: subjectId,
+                selectedFront: front || null, // Set front in state
                 sessionId: sessionId,
                 pomodorosCompleted: 0
             };
@@ -410,6 +397,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             currentPhase: 'idle',
             timeRemaining: 0,
             selectedSubject: null,
+            selectedFront: null, // Reset front
             sessionId: null,
             pomodorosCompleted: 0
         }));

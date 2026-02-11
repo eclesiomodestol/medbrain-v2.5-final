@@ -9,15 +9,17 @@ interface Subject {
 
 interface PomodoroTimerProps {
     subjects: Subject[];
+    subspecialties?: Record<string, string[]>;
 }
 
-export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ subjects }) => {
+export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ subjects, subspecialties }) => {
     const {
         isRunning,
         isPaused,
         currentPhase,
         timeRemaining,
         selectedSubject,
+        selectedFront,
         pomodorosCompleted,
         start,
         pause,
@@ -35,8 +37,15 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ subjects }) => {
     const [isDragging, setIsDragging] = useState(false);
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
     const [tempSubject, setTempSubject] = useState<string>('');
+    const [tempFront, setTempFront] = useState<string>('');
 
     const timerRef = useRef<HTMLDivElement>(null);
+
+    // Update tempFront when tempSubject changes
+    useEffect(() => {
+        setTempFront('');
+    }, [tempSubject]);
+
 
     // Debug: log subjects
     useEffect(() => {
@@ -108,7 +117,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ subjects }) => {
     // Handle start
     const handleStart = () => {
         if (tempSubject) {
-            start(tempSubject);
+            start(tempSubject, tempFront || undefined);
         }
     };
 
@@ -119,6 +128,8 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ subjects }) => {
             ? settings.shortBreak * 60
             : settings.longBreak * 60;
     const progress = totalTime > 0 ? ((totalTime - timeRemaining) / totalTime) * 100 : 0;
+
+    const availableFronts = (subspecialties && tempSubject) ? subspecialties[tempSubject] : undefined;
 
     if (isMinimized) {
         return (
@@ -176,24 +187,42 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ subjects }) => {
 
                 {/* Subject selector (only when idle) */}
                 {currentPhase === 'idle' && !isRunning && (
-                    <select
-                        value={tempSubject}
-                        onChange={(e) => setTempSubject(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-white/20 text-white font-medium text-sm border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50"
-                    >
-                        <option value="" className="text-slate-900">Selecione uma disciplina</option>
-                        {subjects.map(subject => (
-                            <option key={subject.id} value={subject.id} className="text-slate-900">
-                                {subject.name}
-                            </option>
-                        ))}
-                    </select>
+                    <div className="space-y-2">
+                        <select
+                            value={tempSubject}
+                            onChange={(e) => setTempSubject(e.target.value)}
+                            className="w-full px-3 py-2 rounded-xl bg-white/20 text-white font-medium text-sm border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50"
+                        >
+                            <option value="" className="text-slate-900">Selecione uma disciplina</option>
+                            {subjects.map(subject => (
+                                <option key={subject.id} value={subject.id} className="text-slate-900">
+                                    {subject.name}
+                                </option>
+                            ))}
+                        </select>
+
+                        {availableFronts && availableFronts.length > 0 && (
+                            <select
+                                value={tempFront}
+                                onChange={(e) => setTempFront(e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl bg-white/20 text-white font-medium text-sm border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50"
+                            >
+                                <option value="" className="text-slate-900">Selecione uma frente</option>
+                                {availableFronts.map(front => (
+                                    <option key={front} value={front} className="text-slate-900">
+                                        {front}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                    </div>
                 )}
 
                 {/* Current subject (when running) */}
                 {selectedSubject && isRunning && (
                     <div className="text-xs font-medium opacity-90">
                         {subjects.find(s => s.id === selectedSubject)?.name || selectedSubject}
+                        {selectedFront && ` - ${selectedFront}`}
                     </div>
                 )}
             </div>
@@ -234,7 +263,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ subjects }) => {
                     {!isRunning && currentPhase === 'idle' ? (
                         <button
                             onClick={handleStart}
-                            disabled={!tempSubject}
+                            disabled={!tempSubject || (availableFronts && availableFronts.length > 0 && !tempFront)}
                             className="flex-1 py-3 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transition-all"
                         >
                             <Play size={20} className="inline mr-2" />
