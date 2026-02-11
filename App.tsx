@@ -581,14 +581,7 @@ const App: React.FC = () => {
         />
 
         {/* Floating Pomodoro Timer */}
-        <PomodoroTimer subjects={[
-          { id: 'neurologia', name: 'Neurologia' },
-          { id: 'hematologia', name: 'Hematologia' },
-          { id: 'dermatologia', name: 'Dermatologia' },
-          { id: 'otorrino', name: 'Otorrino' },
-          { id: 'ortopedia', name: 'Ortopedia' },
-          { id: 'oftalmo', name: 'Oftalmo' }
-        ]} />
+        <PomodoroTimer subjects={subjectsState} />
 
         <main className="flex-1 p-4 lg:p-8 lg:ml-64 overflow-y-auto">
           <header className="mb-8 flex items-center justify-between">
