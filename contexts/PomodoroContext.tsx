@@ -59,7 +59,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isRunning: false,
         isPaused: false,
         currentPhase: 'idle',
-        timeRemaining: defaultSettings.workDuration * 60, // Start with 25:00 displayed
+        timeRemaining: defaultSettings.workDuration * 60,
         selectedSubject: null,
         pomodorosCompleted: 0,
         sessionId: null,
@@ -101,23 +101,45 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         loadSettings();
     }, []);
 
-    // Load state from localStorage on mount
+    // Load state from localStorage on mount & handle recovery
     useEffect(() => {
         const saved = localStorage.getItem('pomodoro_state');
         if (saved) {
             try {
                 const savedState = JSON.parse(saved);
-                const elapsed = (Date.now() - savedState.startedAt) / 1000;
-                const newTime = Math.max(0, savedState.timeRemaining - elapsed);
 
-                if (newTime > 0 && savedState.isRunning) {
+                // If checking persistence for background running
+                if (savedState.isRunning && !savedState.isPaused && savedState.startedAt && savedState.initialTimeRemaining) {
+                    const elapsedTotal = Math.floor((Date.now() - savedState.startedAt) / 1000);
+                    const correctRemaining = savedState.initialTimeRemaining - elapsedTotal;
+                    const newTime = Math.max(0, correctRemaining);
+
+                    if (newTime > 0) {
+                        setState(prev => ({
+                            ...prev,
+                            ...savedState,
+                            timeRemaining: newTime,
+                            isRunning: true
+                        }));
+                        startTimeRef.current = savedState.startedAt;
+                    } else {
+                        // Timer finished while away
+                        setState(prev => ({
+                            ...prev,
+                            ...savedState,
+                            timeRemaining: 0,
+                            isRunning: false
+                        }));
+                    }
+                } else {
+                    // Paused or idle state
                     setState(prev => ({
                         ...prev,
-                        ...savedState,
-                        timeRemaining: Math.floor(newTime),
-                        isRunning: true
+                        ...savedState
                     }));
-                    startTimeRef.current = Date.now() - (savedState.timeRemaining - newTime) * 1000;
+                    if (savedState.startedAt) {
+                        startTimeRef.current = savedState.startedAt;
+                    }
                 }
             } catch (error) {
                 console.error('Error loading pomodoro state:', error);
@@ -125,156 +147,43 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
     }, []);
 
-    // Save state to localStorage
+    // Save state to localStorage on change
     useEffect(() => {
         if (state.isRunning || state.isPaused) {
             localStorage.setItem('pomodoro_state', JSON.stringify({
                 ...state,
-                startedAt: startTimeRef.current
+                startedAt: startTimeRef.current,
+                // Ensure we persist initialTimeRemaining if it exists in previous state/storage
+                // actually we should store it in state if we want to persist it easily,
+                // but since it's not in the interface, we rely on start/resume to put it there.
+                // The issue: if we just dump `...state`, we lose `initialTimeRemaining` if it's not a property of state.
+                // Fix: Read it from current localStorage to preserve it? 
+                // Or better: Add it to state interface? No, let's keep interface clean.
+                // We'll trust that start/resume set it.
+                // But wait, `localStorage.setItem` in this effect OVERWRITES the one from `start`?
+                // YES. This is the bug. 
+                // If `start` writes `initialTimeRemaining`, and then this effect runs (due to state change),
+                // and writes `...state`, `initialTimeRemaining` is LOST if it's not in `state`.
+            }));
+
+            // To fix the overwrite issue:
+            // We need to fetch the existing 'initialTimeRemaining' from LS and keep it.
+            const existing = localStorage.getItem('pomodoro_state');
+            let initialTimeRemaining = 0;
+            if (existing) {
+                try {
+                    const parsed = JSON.parse(existing);
+                    if (parsed.initialTimeRemaining) initialTimeRemaining = parsed.initialTimeRemaining;
+                } catch (e) { }
+            }
+
+            localStorage.setItem('pomodoro_state', JSON.stringify({
+                ...state,
+                startedAt: startTimeRef.current,
+                initialTimeRemaining: initialTimeRemaining || state.timeRemaining // Fallback
             }));
         }
     }, [state]);
-
-    // Timer countdown with background support
-    useEffect(() => {
-        if (state.isRunning && !state.isPaused) {
-            // Ensure startTimeRef is set correctly on resume/start
-            if (!startTimeRef.current) {
-                startTimeRef.current = Date.now();
-            }
-
-            intervalRef.current = setInterval(() => {
-                const now = Date.now();
-                const elapsedSeconds = Math.floor((now - startTimeRef.current) / 1000); // Total elapsed since start/resume
-
-                // However, logic above is tricky with pauses. 
-                // Better approach: Store 'end time' or 'last update time'.
-                // Simplest robust method for this context:
-                // 1. On tick, calculate delta since last tick (or last saved time).
-                // But since we have state.timeRemaining, we should just decrement BUT check drift.
-
-                // Let's use a simpler approach that relies on localStorage state 'lastUpdated' if available,
-                // or just standard decrement but correct with a stored target end time if we wanted absolute precision.
-                // Given the current structure, let's fix the "tab switch" issue by saving the timestamp of the LAST TICK.
-
-                // Re-implementation:
-                // We will rely on the fact that we saved state to localStorage.
-                // But inside just this effect, we can track time.
-
-                setState(prev => {
-                    // Logic: exact decrement is vulnerable to sleep/background throttling.
-                    // We need to compare against a reference time.
-                    // Let's assume the previous tick set a timestamp.
-
-                    // Actually, let's trust the localStorage logic in mount to recover the BIG chunks of missing time,
-                    // and here just ensure we don't drift too much by using expected end time?
-                    // No, simpler: 
-                    // on mount we recover.
-                    // on interval, we just decrement. 
-                    // IF the tab was backgrounded, this interval might pause.
-                    // WHEN it wakes up, it continues.
-                    // TO FIX THIS: We need to check Date.now() against a "lastTick" ref.
-
-                    const newTime = prev.timeRemaining - 1;
-                    if (newTime <= 0) {
-                        handlePhaseComplete();
-                        return prev;
-                    }
-                    return { ...prev, timeRemaining: newTime };
-                });
-            }, 1000);
-
-            // To truly fix "tab switch stops timer", we need to handle visibility change or just use the localStorage re-hydration logic
-            // which we ALREADY HAVE in lines 105-126.
-            // The issue reported ("muda de aba o contador deixa de contar") typically happens because
-            // existing localStorage logic ONLY runs on mount (refresh), not on tab focus/visibility change.
-            // So we need to add a listener for visibility change to re-sync.
-        } else {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
-        }
-
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
-        };
-    }, [state.isRunning, state.isPaused, handlePhaseComplete]);
-
-    // Re-sync on visibility change (back from background)
-    useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.hidden) return;
-
-            // App just became visible. Re-sync from localStorage (which has the start time)
-            const saved = localStorage.getItem('pomodoro_state');
-            if (saved) {
-                try {
-                    const savedState = JSON.parse(saved);
-                    if (savedState.isRunning) {
-                        const elapsedSinceStart = (Date.now() - savedState.startedAt) / 1000;
-                        // The savedState.timeRemaining was the REMAINING time when we started.
-                        // So current remaining = InitialRemaining - Elapsed
-                        // Wait, previous logic (lines 105) creates a drift if we don't know the "Initial Remaining at Start".
-
-                        // Let's look at `start` function: startTimeRef.current = Date.now();
-                        // And localStorage saves `startedAt: startTimeRef.current`.
-                        // The `state.timeRemaining` in localStorage is the snapshots.
-                        // We need the time remaining AT THE MOMENT of `startedAt`.
-
-                        // FIX: When starting/resuming, we must save `targetEndTime` or `durationAtStart`.
-                        // Current logic is a bit flawed for precise resumption.
-
-                        // Let's do a quick patch:
-                        // On every tick, we update localStorage. (Line 128 already does this on state change).
-                        // But if tab is backgrounded, state doesn't change, so localStorage doesn't update.
-                        // So when we come back, localStorage is old.
-
-                        // VALID FIX:
-                        // Use `startedAt` as the "Time we transitioned to RUNNING".
-                        // And `timeRemainingAtStart` as the duration we had then.
-                        // Current remaining = timeRemainingAtStart - (now - startedAt).
-
-                        // To implement this without rewrite:
-                        // We need `timeRemainingAtStart` stored.
-                        // We can misuse `pomodorosCompleted` or specific field? No.
-                        // Let's check `savedState`. It has `timeRemaining` snapshot from when it was saved.
-                        // That's not enough if it wasn't saved recently.
-
-                        // Let's use `startTimeRef` which IS persisted in localStorage as `startedAt`.
-                        // But we need to know what the timer WAS at that `startedAt`.
-                        // We can assume `state.timeRemaining` updates every second, so `startedAt` effectively shifts?
-                        // No.
-
-                        // Correct Logic Update:
-                        // 1. When `start` or `resume` happens: Set `startedAt = Date.now()` AND `initialTimeRemaining = state.timeRemaining`.
-                        // 2. Persist `initialTimeRemaining`.
-                        // 3. `timeRemaining = initialTimeRemaining - (Date.now() - startedAt) / 1000`.
-
-                        // I will implement a re-sync interval.
-                    }
-                } catch (e) { console.error(e); }
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-    }, []);
-
-    // Actually, the most robust way that fits this code structure is:
-    // Every second, verify drift.
-    useEffect(() => {
-        if (state.isRunning && !state.isPaused) {
-            const now = Date.now();
-            // Just force an update to localStorage with current time to keep it somewhat fresh? No.
-
-            // We need to know how much time passed since the LAST successful tick.
-            // But we don't have that easily without ref.
-        }
-    }, [state.isRunning]); // This is empty/useless logic, deleting.
-
 
     const playNotificationSound = useCallback(() => {
         if (state.settings.soundEnabled) {
@@ -337,6 +246,72 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
     }, [state, playNotificationSound, showNotification]);
 
+    // Timer countdown with drift correction via visibility re-sync
+    useEffect(() => {
+        if (state.isRunning && !state.isPaused) {
+            if (!startTimeRef.current) {
+                const saved = localStorage.getItem('pomodoro_state');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed.startedAt) startTimeRef.current = parsed.startedAt;
+                }
+                if (!startTimeRef.current) startTimeRef.current = Date.now();
+            }
+
+            intervalRef.current = setInterval(() => {
+                setState(prev => {
+                    const newTime = prev.timeRemaining - 1;
+                    if (newTime <= 0) {
+                        handlePhaseComplete();
+                        return { ...prev, timeRemaining: 0 };
+                    }
+                    return { ...prev, timeRemaining: newTime };
+                });
+            }, 1000);
+        } else {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        }
+
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
+        };
+    }, [state.isRunning, state.isPaused, handlePhaseComplete]);
+
+    // Re-sync on visibility change
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden) return;
+
+            const saved = localStorage.getItem('pomodoro_state');
+            if (saved) {
+                try {
+                    const savedState = JSON.parse(saved);
+                    // Critical Drift Correction
+                    if (savedState.isRunning && !savedState.isPaused && savedState.startedAt && savedState.initialTimeRemaining) {
+                        const elapsedTotal = Math.floor((Date.now() - savedState.startedAt) / 1000);
+                        const correctRemaining = savedState.initialTimeRemaining - elapsedTotal;
+
+                        // Only update if discrepancy is large (>2s) to avoid stutter
+                        setState(prev => {
+                            if (Math.abs(prev.timeRemaining - correctRemaining) > 2) {
+                                return { ...prev, timeRemaining: Math.max(0, correctRemaining) };
+                            }
+                            return prev;
+                        });
+                    }
+                } catch (e) { console.error(e); }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
+
     const start = useCallback(async (subjectId: string) => {
         const { data: { user } } = await supabase.auth.getUser();
 
@@ -348,7 +323,8 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 .insert({
                     user_id: user.id,
                     subject_id: subjectId,
-                    status: 'in_progress'
+                    status: 'in_progress',
+                    started_at: new Date().toISOString()
                 })
                 .select()
                 .single();
@@ -375,7 +351,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 sessionId: sessionId,
                 pomodorosCompleted: 0
             };
-            // Save immediately with tracking info
+            // Save initial state logic
             localStorage.setItem('pomodoro_state', JSON.stringify({
                 ...newState,
                 startedAt: now,
@@ -386,14 +362,21 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }, [state.settings.workDuration]);
 
     const pause = useCallback(() => {
-        setState(prev => ({ ...prev, isPaused: true }));
+        setState(prev => {
+            const newState = { ...prev, isPaused: true };
+            // On pause, we don't start/stop anchor times, just update state.
+            // The effect at [state] will handle storage.
+            return newState;
+        });
     }, []);
 
     const resume = useCallback(() => {
         const now = Date.now();
         setState(prev => {
             const newState = { ...prev, isPaused: false };
-            // Use current remaining as new initial
+            // RESUME: We must reset the anchor because "Time Elapsed" logic depends on continuous run.
+            // New Anchor = NOW.
+            // New Initial Time = Current Remaining.
             localStorage.setItem('pomodoro_state', JSON.stringify({
                 ...newState,
                 startedAt: now,
