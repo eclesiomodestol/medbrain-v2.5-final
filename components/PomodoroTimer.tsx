@@ -28,7 +28,7 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ subjects }) => {
         settings
     } = usePomodoroTimer();
 
-    const [isMinimized, setIsMinimized] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(true);
     const [isVisible, setIsVisible] = useState(true);
     const [showSettings, setShowSettings] = useState(false);
     const [position, setPosition] = useState({ x: window.innerWidth - 320, y: 20 });
