@@ -569,7 +569,7 @@ const App: React.FC = () => {
   if (!currentUser) return <Login onLogin={handleLogin} users={users} />;
 
   return (
-    <PomodoroProvider>
+    <PomodoroProvider currentUser={currentUser}>
       <div className="flex min-h-screen bg-[#F3F4F6]">
         <Sidebar
           activeTab={activeTab}
@@ -946,7 +946,7 @@ const App: React.FC = () => {
               />
             )}
             {activeTab === 'grades' && <GradesPanel subjects={subjectsState} grades={grades} onUpdate={handleUpdateGrades} />}
-            {activeTab === 'study' && <StudyReports />}
+            {activeTab === 'study' && <StudyReports currentUser={currentUser} />}
             {activeTab === 'admin' && currentUser?.role === 'admin' && <AdminPanel />}
             {activeTab === 'users' && (
               <UserManagement

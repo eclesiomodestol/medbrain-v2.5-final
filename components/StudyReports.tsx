@@ -30,7 +30,13 @@ interface StudyStats {
     lastMonthHours: number;
 }
 
-export const StudyReports: React.FC = () => {
+import { User } from '../types';
+
+interface StudyReportsProps {
+    currentUser: User | null;
+}
+
+export const StudyReports: React.FC<StudyReportsProps> = ({ currentUser }) => {
     const [dailyData, setDailyData] = useState<DailyStudy[]>([]);
     const [subjectData, setSubjectData] = useState<SubjectDistribution[]>([]);
     const [stats, setStats] = useState<StudyStats>({
@@ -48,41 +54,50 @@ export const StudyReports: React.FC = () => {
 
     useEffect(() => {
         fetchReports();
+
+        // Realtime subscription for "Live" updates
+        const channel = supabase
+            .channel('study-reports-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'study_sessions'
+                },
+                (payload) => {
+                    console.log('[Reports] Realtime update received:', payload);
+                    fetchReports();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [period]);
+
+    const formatHoursToDisplay = (decimalHours: number) => {
+        const hours = Math.floor(decimalHours);
+        const minutes = Math.round((decimalHours - hours) * 60);
+        if (hours === 0 && minutes === 0) return '0m';
+        if (hours === 0) return `${minutes}m`;
+        return `${hours}h ${minutes}m`;
+    };
 
     const fetchReports = async () => {
         try {
-            setLoading(true);
-
-            // Set a timeout to prevent infinite loading
-            const timeout = setTimeout(() => {
-                console.error('Reports loading timeout');
-                setLoading(false);
-            }, 10000); // 10 seconds timeout
-
-            const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-            if (authError) {
-                console.error('Auth error:', authError);
-                clearTimeout(timeout);
-                setLoading(false);
-                return;
-            }
-
-            if (!user) {
-                console.error('No user found');
-                clearTimeout(timeout);
+            if (!currentUser) {
                 setLoading(false);
                 return;
             }
 
             await Promise.all([
-                fetchDailyData(user.id),
-                fetchSubjectDistribution(user.id),
-                fetchStats(user.id)
+                fetchDailyData(currentUser.id),
+                fetchSubjectDistribution(currentUser.id),
+                fetchStats(currentUser.id)
             ]);
 
-            clearTimeout(timeout);
             setLoading(false);
         } catch (error) {
             console.error('Error fetching reports:', error);
@@ -94,9 +109,10 @@ export const StudyReports: React.FC = () => {
         const days = period === '7d' ? 7 : 30;
         const { data } = await supabase
             .from('study_sessions')
-            .select('started_at, duration_minutes')
+            // Add duration_seconds to select
+            .select('started_at, duration_minutes, duration_seconds')
             .eq('user_id', userId)
-            .eq('status', 'completed')
+            .in('status', ['completed', 'in_progress'])
             .gte('started_at', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
             .order('started_at');
 
@@ -108,7 +124,12 @@ export const StudyReports: React.FC = () => {
             if (!acc[date]) {
                 acc[date] = 0;
             }
-            acc[date] += (session.duration_minutes || 0) / 60;
+            // Use seconds if available for precision, else minutes
+            if (session.duration_seconds !== null && session.duration_seconds !== undefined) {
+                acc[date] += session.duration_seconds / 3600;
+            } else {
+                acc[date] += (session.duration_minutes || 0) / 60;
+            }
             return acc;
         }, {});
 
@@ -123,9 +144,9 @@ export const StudyReports: React.FC = () => {
     const fetchSubjectDistribution = async (userId: string) => {
         const { data } = await supabase
             .from('study_sessions')
-            .select('subject_id, duration_minutes, pomodoros_completed')
+            .select('subject_id, duration_minutes, duration_seconds, pomodoros_completed')
             .eq('user_id', userId)
-            .eq('status', 'completed')
+            .in('status', ['completed', 'in_progress'])
             .gte('started_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
 
         if (!data) return;
@@ -136,7 +157,13 @@ export const StudyReports: React.FC = () => {
             if (!acc[subject]) {
                 acc[subject] = { hours: 0, sessions: 0, pomodoros: 0 };
             }
-            acc[subject].hours += (session.duration_minutes || 0) / 60;
+
+            if (session.duration_seconds !== null && session.duration_seconds !== undefined) {
+                acc[subject].hours += session.duration_seconds / 3600;
+            } else {
+                acc[subject].hours += (session.duration_minutes || 0) / 60;
+            }
+
             acc[subject].sessions += 1;
             acc[subject].pomodoros += session.pomodoros_completed || 0;
             return acc;
@@ -144,7 +171,7 @@ export const StudyReports: React.FC = () => {
 
         const subjectArray = Object.entries(grouped).map(([subject_id, stats]: [string, any]) => ({
             subject_id,
-            subject_name: subject_id, // TODO: Get actual subject name
+            subject_name: subject_id,
             hours: Number(stats.hours.toFixed(2)),
             sessions: stats.sessions,
             pomodoros: stats.pomodoros
@@ -159,12 +186,15 @@ export const StudyReports: React.FC = () => {
         todayStart.setHours(0, 0, 0, 0);
         const { data: todayData } = await supabase
             .from('study_sessions')
-            .select('duration_minutes')
+            .select('duration_minutes, duration_seconds')
             .eq('user_id', userId)
-            .eq('status', 'completed')
+            .in('status', ['completed', 'in_progress'])
             .gte('started_at', todayStart.toISOString());
 
-        const todayHours = (todayData?.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) || 0) / 60;
+        const todayHours = (todayData?.reduce((sum, s) => {
+            if (s.duration_seconds !== null && s.duration_seconds !== undefined) return sum + s.duration_seconds;
+            return sum + (s.duration_minutes || 0) * 60;
+        }, 0) || 0) / 3600;
 
         // This week
         const weekStart = new Date();
@@ -172,12 +202,16 @@ export const StudyReports: React.FC = () => {
         weekStart.setHours(0, 0, 0, 0);
         const { data: weekData } = await supabase
             .from('study_sessions')
-            .select('duration_minutes, pomodoros_completed')
+            .select('duration_minutes, duration_seconds, pomodoros_completed')
             .eq('user_id', userId)
-            .eq('status', 'completed')
+            .in('status', ['completed', 'in_progress'])
             .gte('started_at', weekStart.toISOString());
 
-        const weekHours = (weekData?.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) || 0) / 60;
+        const weekHours = (weekData?.reduce((sum, s) => {
+            if (s.duration_seconds !== null && s.duration_seconds !== undefined) return sum + s.duration_seconds;
+            return sum + (s.duration_minutes || 0) * 60;
+        }, 0) || 0) / 3600;
+
         const totalPomodoros = weekData?.reduce((sum, s) => sum + (s.pomodoros_completed || 0), 0) || 0;
 
         // Last week
@@ -185,13 +219,16 @@ export const StudyReports: React.FC = () => {
         lastWeekStart.setDate(lastWeekStart.getDate() - 7);
         const { data: lastWeekData } = await supabase
             .from('study_sessions')
-            .select('duration_minutes')
+            .select('duration_minutes, duration_seconds')
             .eq('user_id', userId)
-            .eq('status', 'completed')
+            .in('status', ['completed', 'in_progress'])
             .gte('started_at', lastWeekStart.toISOString())
             .lt('started_at', weekStart.toISOString());
 
-        const lastWeekHours = (lastWeekData?.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) || 0) / 60;
+        const lastWeekHours = (lastWeekData?.reduce((sum, s) => {
+            if (s.duration_seconds !== null && s.duration_seconds !== undefined) return sum + s.duration_seconds;
+            return sum + (s.duration_minutes || 0) * 60;
+        }, 0) || 0) / 3600;
 
         // This month
         const monthStart = new Date();
@@ -201,7 +238,7 @@ export const StudyReports: React.FC = () => {
             .from('study_sessions')
             .select('duration_minutes')
             .eq('user_id', userId)
-            .eq('status', 'completed')
+            .in('status', ['completed', 'in_progress'])
             .gte('started_at', monthStart.toISOString());
 
         const monthHours = (monthData?.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) || 0) / 60;
@@ -213,7 +250,7 @@ export const StudyReports: React.FC = () => {
             .from('study_sessions')
             .select('duration_minutes')
             .eq('user_id', userId)
-            .eq('status', 'completed')
+            .in('status', ['completed', 'in_progress'])
             .gte('started_at', lastMonthStart.toISOString())
             .lt('started_at', monthStart.toISOString());
 
@@ -291,7 +328,7 @@ export const StudyReports: React.FC = () => {
                 <StatCard
                     icon={<Clock className="text-blue-600" size={24} />}
                     title="Hoje"
-                    value={`${stats.todayHours}h`}
+                    value={stats.todayHours < 1 ? `${Math.round(stats.todayHours * 60)}m` : `${stats.todayHours}h`}
                     subtitle={`${stats.averageDaily.toFixed(1)}h média diária`}
                     color="blue"
                 />
@@ -360,12 +397,9 @@ export const StudyReports: React.FC = () => {
                             <XAxis dataKey="date" stroke="#64748b" style={{ fontSize: '12px' }} />
                             <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
                             <Tooltip
-                                contentStyle={{
-                                    backgroundColor: '#fff',
-                                    border: '2px solid #e2e8f0',
-                                    borderRadius: '12px',
-                                    fontSize: '12px'
-                                }}
+                                formatter={(value: number) => [formatHoursToDisplay(value), 'Tempo']}
+                                labelStyle={{ color: '#1e293b', fontWeight: 'bold' }}
+                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                             />
                             <Line
                                 type="monotone"

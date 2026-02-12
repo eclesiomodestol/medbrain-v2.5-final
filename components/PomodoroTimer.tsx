@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Square, Settings, X, Minimize2, Maximize2, SkipForward } from 'lucide-react';
+import { Play, Pause, Square, Settings, X, Minimize2, Maximize2, SkipForward, Loader2 } from 'lucide-react';
 import { usePomodoroTimer } from '../contexts/PomodoroContext';
 
 interface Subject {
@@ -27,7 +27,8 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ subjects, subspeci
         stop,
         reset,
         skipPhase,
-        settings
+        settings,
+        isSaving
     } = usePomodoroTimer();
 
     const [isMinimized, setIsMinimized] = useState(true);
@@ -185,8 +186,16 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ subjects, subspeci
                     </div>
                 </div>
 
+                {/* Status Message Overlay */}
+                {isSaving && (
+                    <div className="absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center rounded-3xl animate-in fade-in duration-200">
+                        <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-2" />
+                        <span className="font-bold text-slate-800">Salvando progresso...</span>
+                    </div>
+                )}
+
                 {/* Subject selector (only when idle) */}
-                {currentPhase === 'idle' && !isRunning && (
+                {currentPhase === 'idle' && !isRunning && !isSaving && (
                     <div className="space-y-2">
                         <select
                             value={tempSubject}
@@ -214,6 +223,11 @@ export const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ subjects, subspeci
                                     </option>
                                 ))}
                             </select>
+                        )}
+                        {!tempSubject && (
+                            <div className="text-center mt-2 text-white/80 text-xs font-medium">
+                                Selecione uma matéria para iniciar
+                            </div>
                         )}
                     </div>
                 )}
