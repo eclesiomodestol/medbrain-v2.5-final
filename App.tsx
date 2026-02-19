@@ -44,6 +44,19 @@ const App: React.FC = () => {
   // Initialize session tracking
   useSessionManager(currentUser?.id);
 
+  // Centralized Error Handler
+  const handleSupabaseError = (err: any, context: string) => {
+    console.error(`Erro em ${context}:`, err);
+
+    if (err.name === 'TypeError' && err.message === 'Load failed') {
+      alert(`🛑 Conexão Bloqueada (${context})!\n\nSeu navegador ou uma extensão (AdBlock, Privacy Badger, etc) está bloqueando a conexão com o banco de dados.\n\nSOLUÇÃO:\n1. Desative o AdBlock para este site.\n2. Verifique se seu Firewall permite conexões com supabase.co.\n3. Tente usar uma janela anônima.`);
+    } else if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('Network request failed'))) {
+      alert(`Erro de conexão em ${context}: Verifique sua internet.`);
+    } else {
+      alert(`Erro em ${context}: ${err.message || 'Erro desconhecido'}`);
+    }
+  };
+
   const fetchAllData = async () => {
     if (!currentUser) return;
     try {
@@ -816,10 +829,9 @@ const App: React.FC = () => {
                       throw error;
                     }
                   } catch (err: any) {
-                    console.error("Erro ao adicionar horário:", err);
-                    alert(`Erro ao adicionar horário: ${err.message || 'Erro de conexão'}`);
                     // Rollback
                     setScheduleData(prev => prev.filter(s => s.id !== entry.id));
+                    handleSupabaseError(err, "Adicionar Horário");
                   }
                 }}
                 onDelete={(id) => setDeletingItem({ id, type: 'schedule' })}
