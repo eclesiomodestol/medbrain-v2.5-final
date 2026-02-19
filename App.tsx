@@ -689,7 +689,7 @@ const App: React.FC = () => {
                       }
                     } else if (error) {
                       console.error('Erro ao inserir:', error);
-                      throw new Error(`Erro ao criar conteúdo: ${error.message}`);
+                      throw error; // Throw the original error object, don't wrap it
                     }
 
                     console.log('Conteúdo criado com sucesso!');
@@ -699,10 +699,10 @@ const App: React.FC = () => {
                     setTopics(prev => prev.filter(t => t.id !== newTopic.id));
 
                     // User-friendly error message
-                    if (e.message && e.message.includes('Failed to fetch')) {
-                      alert('Erro de conexão: Verifique sua internet e se o Supabase está configurado corretamente.');
-                    } else if (e.name === 'TypeError' && e.message.includes('Load failed')) {
-                      alert('Erro de conexão com o banco de dados. Verifique:\n1. Conexão com internet\n2. Configuração do Supabase (supabase.ts)\n3. CORS no projeto Supabase');
+                    if (e.name === 'TypeError' && e.message === 'Load failed') {
+                      alert('🛑 Erro de Conexão Bloqueada!\n\nSeu navegador ou uma extensão (AdBlock, Privacy Badger, etc) está bloqueando a conexão com o banco de dados.\n\nSOLUÇÃO:\n1. Desative o AdBlock para este site.\n2. Verifique se seu Firewall permite conexões com supabase.co.\n3. Tente usar uma janela anônima.');
+                    } else if (e.message && (e.message.includes('Failed to fetch') || e.message.includes('Network request failed'))) {
+                      alert('Erro de conexão: Verifique sua internet e se o Supabase está acessível.');
                     } else {
                       alert(`Erro ao criar conteúdo: ${e.message || 'Erro desconhecido'}`);
                     }
