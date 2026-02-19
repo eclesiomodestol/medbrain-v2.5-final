@@ -261,7 +261,7 @@ const App: React.FC = () => {
         t.id === topicId ? { ...t, hasMedia: true, pdfUrl: publicUrl, pdfSummary: summary } : t
       ));
     } catch (err: any) {
-      alert(`Erro no upload: ${err.message}`);
+      handleSupabaseError(err, "Upload de PDF");
     }
   }, []);
 
@@ -298,7 +298,7 @@ const App: React.FC = () => {
         return [...prev, grade];
       });
     } catch (err: any) {
-      alert(`Erro ao salvar notas: ${err.message}`);
+      handleSupabaseError(err, "Salvar Notas");
     }
   };
 
@@ -315,7 +315,7 @@ const App: React.FC = () => {
       setQuizzes(prev => [...prev, quiz]);
       setQuizHistory(prev => [quiz, ...prev]);
     } catch (err: any) {
-      alert(`Erro ao salvar simulado: ${err.message}`);
+      handleSupabaseError(err, "Salvar Simulado");
     }
   };
 
@@ -350,8 +350,7 @@ const App: React.FC = () => {
       const { error } = await supabase.from('exams').upsert(dbPayload);
       if (error) throw error;
     } catch (err: any) {
-      console.error("Erro ao salvar prova:", err);
-      alert("Erro ao salvar prova. Verifique sua conexão.");
+      handleSupabaseError(err, "Salvar Prova");
       // Rollback optional but skipping for simplicity
     }
   };
@@ -363,8 +362,7 @@ const App: React.FC = () => {
       alert("Senha redefinida para 12345 com sucesso!");
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, password: '12345' } : u));
     } catch (err: any) {
-      console.error("Erro ao redefinir senha:", err);
-      alert("Erro ao redefinir senha.");
+      handleSupabaseError(err, "Redefinir Senha");
     }
   };
 
@@ -400,7 +398,8 @@ const App: React.FC = () => {
       }
 
     } catch (err: any) {
-      alert(`Falha ao atualizar dados no servidor: ${err.message}`);
+      handleSupabaseError(err, "Atualizar Perfil");
+      // Rollback logic (simple refresh from session/storage if needed, or just let user retry)
     }
   };
 
@@ -434,8 +433,9 @@ const App: React.FC = () => {
       }
 
     } catch (err: any) {
-      console.error("Error updating status:", err);
-      alert(`Erro ao atualizar status: ${err.message}`);
+      handleSupabaseError(err, "Atualizar Status");
+      // Rollback optimistic update
+      setStudentProgress(prev => prev.filter(p => p.topic_id !== topicId)); // Simple rollback attempt or reload
     }
   };
 
@@ -474,7 +474,7 @@ const App: React.FC = () => {
         else setQuizzes(quizzesData || []);
 
       } catch (err) {
-        console.error("Erro de rede:", err);
+        handleSupabaseError(err, "Remover Horário");
       }
     } else if (type === 'internship') {
       // Optimistic Delete Internship
@@ -490,7 +490,7 @@ const App: React.FC = () => {
           if (data) setInternships(data.map((i: any) => ({ ...i, evolutionModel: i.evolution_model || '' })));
         }
       } catch (err) {
-        console.error("Erro de rede ao deletar:", err);
+        handleSupabaseError(err, "Remover Estágio");
       }
     } else if (type === 'exam') {
       const previousExams = examsData;
@@ -502,8 +502,7 @@ const App: React.FC = () => {
           throw error;
         }
       } catch (err: any) {
-        console.error("Erro ao excluir prova:", err);
-        alert("Erro ao excluir prova.");
+        handleSupabaseError(err, "Excluir Prova");
       }
     } else if (type === 'user') {
       const previousUsers = users;
@@ -515,8 +514,7 @@ const App: React.FC = () => {
           throw error;
         }
       } catch (err: any) {
-        console.error("Erro ao excluir usuário:", err);
-        alert("Erro ao excluir usuário.");
+        handleSupabaseError(err, "Excluir Usuário");
       }
     } else if (type === 'pdf') {
       const topic = topics.find(t => t.id === id);
@@ -543,7 +541,7 @@ const App: React.FC = () => {
             : t
         ));
       } catch (err: any) {
-        alert(`Falha ao remover arquivo: ${err.message}`);
+        handleSupabaseError(err, "Remover Arquivo");
       }
     } else if (type === 'topic') {
       try {
@@ -573,8 +571,7 @@ const App: React.FC = () => {
         setStudentProgress(prev => prev.filter(p => p.topic_id !== id));
 
       } catch (err: any) {
-        console.error("Delete detailed error:", err);
-        alert(`Erro ao excluir conteúdo: ${err.message || 'Erro de conexão/permissão'}`);
+        handleSupabaseError(err, "Excluir Conteúdo");
       }
     }
   }, [deletingItem, currentUser, topics]);
@@ -805,10 +802,9 @@ const App: React.FC = () => {
                       throw error;
                     }
                   } catch (err: any) {
-                    console.error("Erro ao atualizar horário:", err);
-                    alert(`Erro ao salvar alteração: ${err.message || 'Erro de conexão'}`);
                     // Rollback
                     setScheduleData(previousSchedule);
+                    handleSupabaseError(err, "Atualizar Horário");
                   }
                 }}
                 onAdd={async (entry) => {

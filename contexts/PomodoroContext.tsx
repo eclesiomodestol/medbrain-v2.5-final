@@ -370,6 +370,7 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode; currentUser
 
                     if (error) {
                         console.error('[Pomodoro] Heartbeat save failed:', error);
+                        // Optional: Set a UI flag for "Sync issues"
                     } else {
                         console.log('[Pomodoro] Heartbeat saved successfully.');
                     }
@@ -405,32 +406,38 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode; currentUser
 
             if (activeSessions && activeSessions.length > 0) {
                 console.log('[Pomodoro] Closing orphaned sessions:', activeSessions.length);
-                await supabase
-                    .from('study_sessions')
-                    .update({ status: 'abandoned', ended_at: new Date().toISOString() })
-                    .eq('user_id', user.id)
-                    .eq('status', 'in_progress');
+                try {
+                    await supabase
+                        .from('study_sessions')
+                        .update({ status: 'abandoned', ended_at: new Date().toISOString() })
+                        .eq('user_id', user.id)
+                        .eq('status', 'in_progress');
+                } catch (e) { console.error("Error closing orphaned sessions:", e); }
             }
 
             // 2. Create new session
-            const { data: session, error } = await supabase
-                .from('study_sessions')
-                .insert({
-                    user_id: user.id,
-                    subject_id: subjectId,
-                    front: front || null,
-                    status: 'in_progress',
-                    started_at: new Date().toISOString(),
-                    duration_seconds: 0
-                })
-                .select()
-                .single();
+            try {
+                const { data: session, error } = await supabase
+                    .from('study_sessions')
+                    .insert({
+                        user_id: user.id,
+                        subject_id: subjectId,
+                        front: front || null,
+                        status: 'in_progress',
+                        started_at: new Date().toISOString(),
+                        duration_seconds: 0
+                    })
+                    .select()
+                    .single();
 
-            if (!error && session) {
-                console.log('[Pomodoro] Session created:', session.id);
-                sessionId = session.id;
-            } else {
-                console.error('[Pomodoro] Could not create study session:', error);
+                if (error) throw error;
+                if (session) {
+                    console.log('[Pomodoro] Session created:', session.id);
+                    sessionId = session.id;
+                }
+            } catch (err: any) {
+                console.error('[Pomodoro] Could not create study session:', err);
+                alert(`Erro ao iniciar sessão de estudo: ${err.message}. Seu tempo local será contado, mas o histórico pode não ser salvo.`);
             }
         }
 
@@ -558,23 +565,30 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode; currentUser
         const user = currentUser;
 
         const updatedSettings = { ...state.settings, ...newSettings };
+        setState(prev => ({ ...prev, settings: updatedSettings })); // Optimistic update
 
-        await supabase
-            .from('pomodoro_settings')
-            .upsert({
-                user_id: user.id,
-                work_duration: updatedSettings.workDuration,
-                short_break: updatedSettings.shortBreak,
-                long_break: updatedSettings.longBreak,
-                pomodoros_until_long_break: updatedSettings.pomodorosUntilLongBreak,
-                auto_start_breaks: updatedSettings.autoStartBreaks,
-                auto_start_pomodoros: updatedSettings.autoStartPomodoros,
-                sound_enabled: updatedSettings.soundEnabled,
-                notifications_enabled: updatedSettings.notificationsEnabled
-            });
+        try {
+            const { error } = await supabase
+                .from('pomodoro_settings')
+                .upsert({
+                    user_id: user.id,
+                    work_duration: updatedSettings.workDuration,
+                    short_break: updatedSettings.shortBreak,
+                    long_break: updatedSettings.longBreak,
+                    pomodoros_until_long_break: updatedSettings.pomodorosUntilLongBreak,
+                    auto_start_breaks: updatedSettings.autoStartBreaks,
+                    auto_start_pomodoros: updatedSettings.autoStartPomodoros,
+                    sound_enabled: updatedSettings.soundEnabled,
+                    notifications_enabled: updatedSettings.notificationsEnabled
+                });
 
-        setState(prev => ({ ...prev, settings: updatedSettings }));
-    }, [state.settings]);
+            if (error) throw error;
+        } catch (err: any) {
+            console.error("Erro ao salvar configurações:", err);
+            // Rollback (complex, so we just alert for now)
+            alert(`Erro ao salvar configurações: ${err.message || 'Erro de conexão'}`);
+        }
+    }, [state.settings, currentUser]);
 
     return (
         <PomodoroContext.Provider
