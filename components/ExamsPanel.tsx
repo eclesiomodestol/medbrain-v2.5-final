@@ -259,7 +259,7 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
                     </span>
                     <span className="text-3xl font-black text-slate-900">{progress}%</span>
                   </div>
-                  <span className="text-[10px] text-slate-400 block font-black uppercase tracking-widest mb-1">Data & Horário</span>
+                  <span className="text-[10px] text-slate-400 block font-black uppercase tracking-widest mb-1">Data, Horário & Peso</span>
                   {isEditing ? (
                     <div className="flex flex-col gap-2">
                       <input
@@ -297,6 +297,15 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
                         <option value={ExamTag.SUB}>Segunda Chamada</option>
                         <option value={ExamTag.FINAL}>Prova Final</option>
                       </select>
+                      <input
+                        type="number"
+                        placeholder="Peso da Nota (opcional)"
+                        step="0.1"
+                        min="0"
+                        className="text-xs font-bold text-slate-700 border-b border-blue-500 outline-none bg-transparent mt-2 py-1"
+                        value={editFormData.weight || ''}
+                        onChange={(e) => setEditFormData({ ...editFormData, weight: parseFloat(e.target.value) || undefined })}
+                      />
                     </div>
                   ) : (
                     <div className="text-right">
@@ -306,6 +315,11 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
                       {(exam.time || exam.shift) && (
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mt-1">
                           {exam.shift} {exam.time ? `• ${exam.time}` : ''}
+                        </span>
+                      )}
+                      {exam.weight !== undefined && (
+                        <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest block mt-1">
+                          Peso: {exam.weight}
                         </span>
                       )}
                     </div>
@@ -377,6 +391,7 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
                       time: newExamForm.time,
                       shift: newExamForm.shift,
                       associatedTag: newExamForm.associatedTag,
+                      weight: newExamForm.weight,
                       // defaults
 
                     } as Exam);
@@ -442,6 +457,19 @@ export const ExamsPanel: React.FC<ExamsPanelProps> = ({ topics, exams, subjects,
                   <option value={ExamTag.SUB}>Segunda Chamada</option>
                   <option value={ExamTag.FINAL}>Prova Final</option>
                 </select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso da Nota</span>
+                <input
+                  type="number"
+                  placeholder="Peso (opcional)"
+                  step="0.1"
+                  min="0"
+                  className="w-full p-3 font-bold text-slate-700 bg-slate-50 border rounded-xl"
+                  value={newExamForm.weight || ''}
+                  onChange={(e) => setNewExamForm({ ...newExamForm, weight: parseFloat(e.target.value) || undefined })}
+                />
               </div>
             </div>
           </div>

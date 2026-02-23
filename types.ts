@@ -29,12 +29,14 @@ export interface Topic {
   pdfSummary?: string;
   shift?: Period;
   createdAt?: string; // ISO string for creation date
+  institution?: string;
 }
 
 export interface Subject {
   id: string;
   name: string;
   color: string;
+  institution?: string;
 }
 
 export interface ScheduleEntry {
@@ -44,6 +46,7 @@ export interface ScheduleEntry {
   subjectId: string;
   front?: string;
   userId?: string;
+  institution?: string;
 }
 
 export interface Exam {
@@ -54,6 +57,8 @@ export interface Exam {
   time?: string;
   shift?: string;
   associatedTag?: ExamTag;
+  institution?: string;
+  weight?: number;
 }
 
 export interface Grade {
@@ -89,6 +94,7 @@ export interface Internship {
   location: string;
   evolutionModel: string;
   status: 'Concluído' | 'Em Andamento' | 'Próximo';
+  institution?: string;
 }
 
 export interface QuizQuestion {
@@ -105,6 +111,7 @@ export interface Quiz {
   title: string;
   questions: QuizQuestion[];
   createdAt: string;
+  institution?: string;
 }
 
 export type UserRole = 'admin' | 'student';
@@ -119,6 +126,7 @@ export interface User {
   status: UserStatus;
   accessibleSubjects: string[] | 'all';
   avatar?: string;
+  institution?: string;
 }
 
 export interface StudentProgress {

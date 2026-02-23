@@ -4,6 +4,7 @@ import {
     Users, Activity, Download, Smartphone, AlertTriangle,
     TrendingUp, BarChart3, PieChart, Clock
 } from 'lucide-react';
+import { User } from '../types';
 
 interface AnalyticsStats {
     totalUsers: number;
@@ -50,7 +51,7 @@ interface AccessLog {
     last_activity: string;
 }
 
-export const AdminPanel: React.FC = () => {
+export const AdminPanel: React.FC<{ currentUser: User }> = ({ currentUser }) => {
     const [stats, setStats] = useState<AnalyticsStats>({
         totalUsers: 0,
         activeNow: 0,
@@ -78,14 +79,21 @@ export const AdminPanel: React.FC = () => {
 
     const fetchAnalytics = async () => {
         try {
+            const { data: usersData } = await supabase
+                .from('users')
+                .select('id')
+                .eq('institution', currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte');
+
+            const institutionUserIds = usersData?.map(u => u.id) || [];
+            if (institutionUserIds.length === 0) institutionUserIds.push('none');
+
             await Promise.all([
-                fetchGeneralStats(),
-                fetchModuleUsage(),
-                fetchDownloadStats(),
-                fetchDeviceStats(),
-                fetchDeviceStats(),
-                fetchConcurrentSessions(),
-                fetchAccessLogs()
+                fetchGeneralStats(institutionUserIds),
+                fetchModuleUsage(institutionUserIds),
+                fetchDownloadStats(institutionUserIds),
+                fetchDeviceStats(institutionUserIds),
+                fetchConcurrentSessions(institutionUserIds),
+                fetchAccessLogs(institutionUserIds)
             ]);
             setLoading(false);
         } catch (error) {
@@ -94,17 +102,19 @@ export const AdminPanel: React.FC = () => {
         }
     };
 
-    const fetchGeneralStats = async () => {
+    const fetchGeneralStats = async (institutionUserIds: string[]) => {
         // Total de usuários (usar tabela users pública em vez de auth.users)
         const { count: totalUsers } = await supabase
             .from('users')
-            .select('*', { count: 'exact', head: true });
+            .select('*', { count: 'exact', head: true })
+            .eq('institution', currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte');
 
         // Usuários ativos agora (últimos 5 minutos)
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
         const { count: activeNow } = await supabase
             .from('user_sessions')
             .select('user_id', { count: 'exact', head: true })
+            .in('user_id', institutionUserIds)
             .eq('is_active', true)
             .gte('last_activity', fiveMinutesAgo);
 
@@ -114,34 +124,40 @@ export const AdminPanel: React.FC = () => {
         const { count: activeToday } = await supabase
             .from('user_sessions')
             .select('user_id', { count: 'exact', head: true })
+            .in('user_id', institutionUserIds)
             .gte('started_at', todayStart.toISOString());
 
         // Usuários ativos na semana
         const { count: activeWeek } = await supabase
             .from('user_sessions')
             .select('user_id', { count: 'exact', head: true })
+            .in('user_id', institutionUserIds)
             .gte('started_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
 
         // Total de sessões
         const { count: totalSessions } = await supabase
             .from('user_sessions')
-            .select('*', { count: 'exact', head: true });
+            .select('*', { count: 'exact', head: true })
+            .in('user_id', institutionUserIds);
 
         // Dispositivos únicos
         const { data: devices } = await supabase
             .from('user_sessions')
-            .select('device_fingerprint');
+            .select('device_fingerprint')
+            .in('user_id', institutionUserIds);
         const uniqueDevices = new Set(devices?.map(d => d.device_fingerprint)).size;
 
         // Total de downloads
         const { count: totalDownloads } = await supabase
             .from('download_logs')
-            .select('*', { count: 'exact', head: true });
+            .select('*', { count: 'exact', head: true })
+            .in('user_id', institutionUserIds);
 
         // Acessos simultâneos
         const { data: concurrent } = await supabase
             .from('user_sessions')
             .select('user_id')
+            .in('user_id', institutionUserIds)
             .eq('is_active', true);
 
         const userCounts = concurrent?.reduce((acc: any, session) => {
@@ -162,10 +178,11 @@ export const AdminPanel: React.FC = () => {
         });
     };
 
-    const fetchModuleUsage = async () => {
+    const fetchModuleUsage = async (institutionUserIds: string[]) => {
         const { data } = await supabase
             .from('activity_logs')
             .select('module, user_id')
+            .in('user_id', institutionUserIds)
             .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
 
         if (!data) return;
@@ -188,10 +205,11 @@ export const AdminPanel: React.FC = () => {
         setModuleUsage(usage);
     };
 
-    const fetchDownloadStats = async () => {
+    const fetchDownloadStats = async (institutionUserIds: string[]) => {
         const { data } = await supabase
             .from('download_logs')
             .select('file_type, user_id')
+            .in('user_id', institutionUserIds)
             .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
 
         if (!data) return;
@@ -214,10 +232,11 @@ export const AdminPanel: React.FC = () => {
         setDownloadStats(downloads);
     };
 
-    const fetchDeviceStats = async () => {
+    const fetchDeviceStats = async (institutionUserIds: string[]) => {
         const { data } = await supabase
             .from('user_sessions')
-            .select('device_info');
+            .select('device_info')
+            .in('user_id', institutionUserIds);
 
         if (!data) return;
 
@@ -235,10 +254,11 @@ export const AdminPanel: React.FC = () => {
         setDeviceStats(devices);
     };
 
-    const fetchConcurrentSessions = async () => {
+    const fetchConcurrentSessions = async (institutionUserIds: string[]) => {
         const { data: sessions } = await supabase
             .from('user_sessions')
             .select('user_id, device_info')
+            .in('user_id', institutionUserIds)
             .eq('is_active', true);
 
         if (!sessions) return;
@@ -262,11 +282,12 @@ export const AdminPanel: React.FC = () => {
         setConcurrentSessions(concurrent);
     };
 
-    const fetchAccessLogs = async () => {
+    const fetchAccessLogs = async (institutionUserIds: string[]) => {
         // Fetch recent sessions
         const { data: sessions } = await supabase
             .from('user_sessions')
             .select('*')
+            .in('user_id', institutionUserIds)
             .order('started_at', { ascending: false })
             .limit(50);
 
@@ -277,7 +298,10 @@ export const AdminPanel: React.FC = () => {
         // Assuming we have a public users table or we can't get emails easily without admin rights on auth.
 
         // Let's force a fetch of users 
-        const { data: users } = await supabase.from('users').select('id, email, name');
+        const { data: users } = await supabase
+            .from('users')
+            .select('id, email, name')
+            .eq('institution', currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte');
         const userMap = new Map(users?.map(u => [u.id, u]) || []);
 
         const enrichedLogs = sessions.map(session => ({

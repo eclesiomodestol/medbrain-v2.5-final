@@ -19,7 +19,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, curre
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'schedule', label: 'Horário Acadêmico', icon: Calendar },
+    { id: 'weekly-schedule', label: 'Cronograma da Semana', icon: Calendar },
+    { id: 'schedule', label: 'Grade Curricular', icon: LayoutDashboard }, // using different icon or repurposed name
     { id: 'estagio', label: 'Estágios', icon: MapPin },
     { id: 'syllabus', label: 'Conteúdos', icon: BookOpen },
     { id: 'quiz', label: 'Simulados IA', icon: BrainCircuit },

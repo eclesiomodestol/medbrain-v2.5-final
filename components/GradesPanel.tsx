@@ -1,11 +1,12 @@
 
 import React, { useState } from 'react';
-import { Subject, Grade } from '../types';
+import { Subject, Grade, Exam } from '../types';
 import { Save, Calculator, TrendingUp, Info, GraduationCap, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface GradesPanelProps {
   subjects: Subject[];
   grades: Grade[];
+  exams: Exam[];
   onUpdate: (grade: Grade) => void;
 }
 
@@ -35,12 +36,12 @@ const SPECIAL_SUBJECT_CONFIG: Record<string, {
   }
 };
 
-export const GradesPanel: React.FC<GradesPanelProps> = ({ subjects, grades, onUpdate }) => {
+export const GradesPanel: React.FC<GradesPanelProps> = ({ subjects, grades, exams, onUpdate }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Grade | null>(null);
 
   // Novo sistema de cálculo baseado em componentes
-  const calculateComponentGrades = (grade: Grade) => {
+  const calculateComponentGrades = (grade: Grade, subjectExams: Exam[]) => {
     const config = SPECIAL_SUBJECT_CONFIG[grade.subjectId];
     if (!config) {
       // Disciplinas simples: PR1 (9.0) + Teste Progresso (1.0) e PR2 (10.0)
@@ -72,8 +73,29 @@ export const GradesPanel: React.FC<GradesPanelProps> = ({ subjects, grades, onUp
     };
   };
 
-  const calculateFinalAverage = (grade: Grade) => {
-    const { pr1, pr2 } = calculateComponentGrades(grade);
+  const calculateFinalAverage = (grade: Grade, subjectExams: Exam[]) => {
+    // If Admin defined exams with explicit weights for this subject, use a weighted average instead of the strict (PR1+PR2)/2
+    const examsWithWeight = subjectExams.filter(e => e.weight !== undefined && e.weight > 0);
+
+    if (examsWithWeight.length > 0) {
+      // Dynamic Calculation based on Exams
+      // Since `grade` currently stores just `pr1` and `pr2` statically, we need a way to map grades to exams.
+      // Assuming for now that PR1 represents the first weighted exam, and PR2 the second, etc.
+      // If there are more exams, we use the `pr1` and `pr2` to calculate the final average based on weights.
+      // For a fully dynamic system, `Grade` would need a `scores: Record<examId, number>`, but to keep backward compatibility:
+
+      const { pr1, pr2 } = calculateComponentGrades(grade, subjectExams);
+
+      // Fallback simple weighted average of PR1 and PR2 if 2 exams are given weights.
+      if (examsWithWeight.length === 2) {
+        const w1 = examsWithWeight[0].weight || 1;
+        const w2 = examsWithWeight[1].weight || 1;
+        return ((pr1 * w1) + (pr2 * w2)) / (w1 + w2);
+      }
+    }
+
+    // Default Calculation
+    const { pr1, pr2 } = calculateComponentGrades(grade, subjectExams);
     return (pr1 + pr2) / 2;
   };
 
@@ -113,8 +135,9 @@ export const GradesPanel: React.FC<GradesPanelProps> = ({ subjects, grades, onUp
 
   const handleSave = () => {
     if (formData) {
+      const subjectExams = exams.filter(e => e.subjectId === formData.subjectId);
       // Recalcular notas antes de salvar
-      const { pr1, pr2 } = calculateComponentGrades(formData);
+      const { pr1, pr2 } = calculateComponentGrades(formData, subjectExams);
       formData.pr1 = pr1;
       formData.pr2 = pr2;
 
@@ -144,7 +167,7 @@ export const GradesPanel: React.FC<GradesPanelProps> = ({ subjects, grades, onUp
             </div>
             <div className="bg-blue-600 p-6 rounded-[28px] text-center shadow-xl shadow-blue-500/20 min-w-[140px]">
               <span className="block text-3xl font-black text-white">
-                {grades.filter(g => calculateFinalAverage(g) >= 7).length}
+                {grades.filter(g => calculateFinalAverage(g, exams.filter(e => e.subjectId === g.subjectId)) >= 7).length}
               </span>
               <span className="text-[10px] font-black uppercase tracking-widest text-blue-200">Aprovações</span>
             </div>
@@ -155,6 +178,7 @@ export const GradesPanel: React.FC<GradesPanelProps> = ({ subjects, grades, onUp
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {subjects.map(subject => {
           const grade = grades.find(g => g.subjectId === subject.id);
+          const subjectExams = exams.filter(e => e.subjectId === subject.id);
           const isSpecial = !!SPECIAL_SUBJECT_CONFIG[subject.id];
 
           let displayPR1 = grade?.pr1 || 0;
@@ -162,10 +186,10 @@ export const GradesPanel: React.FC<GradesPanelProps> = ({ subjects, grades, onUp
           let finalAvg = 0;
 
           if (grade) {
-            const { pr1, pr2 } = calculateComponentGrades(grade);
+            const { pr1, pr2 } = calculateComponentGrades(grade, subjectExams);
             displayPR1 = pr1;
             displayPR2 = pr2;
-            finalAvg = (pr1 + pr2) / 2;
+            finalAvg = calculateFinalAverage(grade, subjectExams);
           }
 
           const isEditing = editingId === subject.id;
@@ -193,12 +217,13 @@ export const GradesPanel: React.FC<GradesPanelProps> = ({ subjects, grades, onUp
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
                   {/* Indicador de Progresso para Aprovação */}
                   {(() => {
-                    const currentGrades = calculateComponentGrades(formData!);
+                    const currentGrades = calculateComponentGrades(formData!, subjectExams);
                     const currentTotal = currentGrades.pr1 + currentGrades.pr2; // Total de pontos (0-20)
                     const neededTotal = 14.0; // Total necessário para aprovação (média 7.0)
                     const neededForApproval = Math.max(0, neededTotal - currentTotal);
                     const progressPercent = Math.min((currentTotal / neededTotal) * 100, 100);
-                    const currentAvg = currentTotal / 2;
+
+                    const currentAvg = calculateFinalAverage(formData!, subjectExams);
 
                     return (
                       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-3xl p-6 space-y-3">
@@ -461,7 +486,8 @@ export const GradesPanel: React.FC<GradesPanelProps> = ({ subjects, grades, onUp
           <p className="text-xs text-blue-700 font-medium leading-relaxed max-w-2xl">
             <strong>CM3 e CC3:</strong> PR1 = Média(3 componentes) até 9.0 + Teste de Progresso até 1.0. PR2 = Média(3 componentes) até 9.5 + Projeto Integrador até 0.5.
             <strong> Outras disciplinas:</strong> PR1 = Nota até 9.0 + Teste de Progresso até 1.0. PR2 = Nota até 10.0.
-            <strong>Média Final</strong> = (PR1 + PR2) / 2.
+            <br />
+            <strong>Administradores</strong> podem cadastrar "Pesos" nas avaliações do Calendário de Provas. Quando cadastrados, a média final é calculada de forma <strong>ponderada</strong>. Caso contrário, aplica-se a Média Aritmética Simples: (PR1 + PR2) / 2.
           </p>
         </div>
       </div>

@@ -21,6 +21,7 @@ interface ContentTrackerProps {
   onUploadPDF: (id: string, hasMedia: boolean, pdfUrl?: string, pdfSummary?: string) => void;
   onDeleteTopic?: (id: string) => void;
   onSaveQuiz: (quiz: Quiz) => Promise<void>;
+  onAddSubject?: (subject: Subject) => void;
 }
 
 const COLOR_MAP: Record<string, string> = {
@@ -122,7 +123,7 @@ const SafeViewer = ({ topic, user, type, onClose }: { topic: Topic, user: User, 
             {type === 'summary' ? <BrainCircuit size={28} /> : <FileText size={28} />}
           </div>
           <div>
-            <h3 className="text-2xl font-black tracking-tight line-clamp-1">{topic.title}</h3>
+            <h3 className="text-2xl font-black tracking-tight line-clamp-2">{topic.title}</h3>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
               {type === 'summary' ? 'Análise Médica Estruturada MedBrain' : 'Documento Clínico Digital'} • {user.name}
             </p>
@@ -313,7 +314,8 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
   onAddTopic,
   onBulkImport,
   onDeleteTopic,
-  onSaveQuiz
+  onSaveQuiz,
+  onAddSubject
 }) => {
   const virtualSubjects = useMemo(() => {
     const list: { id: string, name: string, parentId: string, specialty?: string }[] = [];
@@ -364,6 +366,7 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [isAddingSubject, setIsAddingSubject] = useState(false);
   const [showCSVImporter, setShowCSVImporter] = useState(false);
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState<string | null>(null);
 
@@ -371,8 +374,18 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Topic>>({});
   const [newTopicForm, setNewTopicForm] = useState<Partial<Topic>>({
-    title: '', subjectId: subjects[0]?.id || '', date: '', tag: ExamTag.NONE
+    title: '', subjectId: '', date: '', tag: ExamTag.NONE
   });
+  const [newSubjectForm, setNewSubjectForm] = useState<Partial<Subject>>({
+    name: '', color: 'blue'
+  });
+
+  // Auto-select first subject for topic form
+  useEffect(() => {
+    if (isAdding && !newTopicForm.subjectId && virtualSubjects.length > 0) {
+      setNewTopicForm(prev => ({ ...prev, subjectId: virtualSubjects[0].id }));
+    }
+  }, [isAdding, virtualSubjects, newTopicForm.subjectId]);
 
 
 
@@ -464,7 +477,6 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
     // Check Daily Limit (Max 5)
     const todayStr = new Date().toLocaleDateString('pt-BR');
     const todayQuizzes = quizzes.filter(q => {
-      // Handle varying date formats if necessary, but assuming ISO or locale string
       // robust check: compare YYYY-MM-DD or Locale String
       const qDate = new Date(q.createdAt).toLocaleDateString('pt-BR');
       return q.userId === currentUser.id && qDate === todayStr;
@@ -534,9 +546,23 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
       };
       onAddTopic(newTopic);
       setIsAdding(false);
-      setNewTopicForm({ title: '', subjectId: subjects[0]?.id || '', date: '', tag: ExamTag.NONE, shift: '' as any });
+      setNewTopicForm({ title: '', subjectId: virtualSubjects[0]?.id || '', date: '', tag: ExamTag.NONE, shift: '' as any });
     } else {
-      alert("Preencha título e disciplina!");
+      alert("Preencha título e selecione a disciplina!");
+    }
+  };
+
+  const handleCreateSubject = () => {
+    if (newSubjectForm.name && onAddSubject) {
+      onAddSubject({
+        id: Math.random().toString(36).substr(2, 9),
+        name: newSubjectForm.name,
+        color: newSubjectForm.color || 'blue'
+      });
+      setIsAddingSubject(false);
+      setNewSubjectForm({ name: '', color: 'blue' });
+    } else {
+      alert("Preencha o nome da disciplina!");
     }
   };
 
@@ -751,14 +777,20 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
         {isAdmin && (
           <div className="flex gap-3">
             <button
-              onClick={() => setShowCSVImporter(true)}
+              onClick={() => { setIsAddingSubject(!isAddingSubject); setIsAdding(false); setShowCSVImporter(false); }}
+              className="px-6 py-4 bg-emerald-600 text-white rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg active:scale-95"
+            >
+              <Plus size={18} /> Nova Disciplina
+            </button>
+            <button
+              onClick={() => { setShowCSVImporter(true); setIsAdding(false); setIsAddingSubject(false); }}
               className="px-6 py-4 bg-blue-600 text-white rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg active:scale-95"
             >
               <Upload size={18} />
               Importar CSV
             </button>
             <button
-              onClick={() => setIsAdding(!isAdding)}
+              onClick={() => { setIsAdding(!isAdding); setIsAddingSubject(false); setShowCSVImporter(false); }}
               className="px-6 py-4 bg-slate-900 text-white rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg active:scale-95"
             >
               {isAdding ? <X size={18} /> : <Plus size={18} />}
@@ -767,6 +799,38 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
           </div>
         )}
       </div>
+
+      {isAddingSubject && (
+        <div className="bg-emerald-900 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-top-4 text-white">
+          <h3 className="text-lg font-black uppercase tracking-widest mb-6 flex items-center gap-2">
+            <Sparkles className="text-emerald-400" size={20} /> Nova Disciplina Curricular
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-6">
+            <input
+              placeholder="Nome da Disciplina (Ex: Habilidades Clínicas V)"
+              className="col-span-12 md:col-span-8 p-3 lg:p-4 rounded-xl bg-emerald-800/50 border border-emerald-700/50 text-white placeholder-emerald-400/50 font-bold outline-none focus:border-emerald-400 transition-all shadow-inner text-sm lg:text-base"
+              value={newSubjectForm.name}
+              onChange={e => setNewSubjectForm({ ...newSubjectForm, name: e.target.value })}
+            />
+            <select
+              className="col-span-12 md:col-span-4 p-3 lg:p-4 rounded-xl bg-emerald-800/50 border border-emerald-700/50 text-white font-bold outline-none focus:border-emerald-400 transition-all cursor-pointer text-sm lg:text-base"
+              value={newSubjectForm.color}
+              onChange={(e) => setNewSubjectForm({ ...newSubjectForm, color: e.target.value })}
+            >
+              <option value="blue" className="text-slate-900">Azul</option>
+              <option value="indigo" className="text-slate-900">Índigo</option>
+              <option value="emerald" className="text-slate-900">Esmeralda</option>
+              <option value="amber" className="text-slate-900">Âmbar</option>
+              <option value="rose" className="text-slate-900">Rosa</option>
+              <option value="slate" className="text-slate-900">Cinza</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setIsAddingSubject(false)} className="px-6 py-3 rounded-xl hover:bg-white/10 font-bold text-xs uppercase tracking-widest">Cancelar</button>
+            <button onClick={handleCreateSubject} className="px-8 py-3 bg-emerald-500 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-emerald-400 shadow-lg shadow-emerald-500/20 text-emerald-950">Salvar Disciplina</button>
+          </div>
+        </div>
+      )}
 
       {isAdding && (
         <div className="bg-slate-900 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-top-4 text-white">
@@ -959,8 +1023,8 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
                           </div>
                         ) : (
                           <>
-                            <p className="font-bold text-slate-900 line-clamp-1">{topic.title}</p>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            <p className="font-bold text-slate-900 break-words whitespace-normal">{topic.title}</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
                               {topic.front ? `${topic.front} (${subject?.name})` : subject?.name}
                             </p>
                           </>

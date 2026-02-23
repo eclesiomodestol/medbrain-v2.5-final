@@ -110,7 +110,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ currentUser, onUpdateU
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Email (Login)</label>
                             <input
-                                value={currentUser.username}
+                                value={currentUser.email}
                                 disabled
                                 className="w-full p-4 bg-slate-100 border border-slate-200 rounded-xl outline-none font-bold text-slate-500 cursor-not-allowed"
                             />

@@ -18,6 +18,9 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [institution, setInstitution] = useState('FMJ IDOMED - Juazeiro do Norte');
+  const [customInstitution, setCustomInstitution] = useState('');
+  const [availableInstitutions, setAvailableInstitutions] = useState<string[]>(['FMJ IDOMED - Juazeiro do Norte', 'UNIPAMPA - Uruguaiana - RS']);
 
   // Force cleanup of potential stale Supabase sessions that cause 400/406 errors
   React.useEffect(() => {
@@ -29,6 +32,24 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       }
     };
     cleanStaleSession();
+
+    const fetchInstitutions = async () => {
+      try {
+        const { data, error } = await supabase.from('users').select('institution');
+        if (!error && data) {
+          const unique = Array.from(new Set(data.map(u => u.institution).filter(Boolean))) as string[];
+          if (unique.length > 0) {
+            setAvailableInstitutions(unique);
+            if (!unique.includes('FMJ IDOMED - Juazeiro do Norte')) {
+              setInstitution(unique[0]);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao buscar instituições", err);
+      }
+    };
+    fetchInstitutions();
   }, []);
 
   const handleLogin = async () => {
@@ -58,7 +79,9 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   const handleRegister = async () => {
-    if (!name || !email || !password) {
+    const finalInstitution = institution === 'Outra' ? customInstitution.trim() : institution;
+
+    if (!name || !email || !password || !finalInstitution) {
       setError('Por favor, preencha todos os campos.');
       return;
     }
@@ -82,7 +105,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       password,
       role: 'student',
       status: 'pending',
-      accessible_subjects: []
+      accessible_subjects: [],
+      institution: finalInstitution
     };
 
     const { error: regError } = await supabase.from('users').insert(newUser);
@@ -153,6 +177,36 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                       onChange={(e) => setName(e.target.value)}
                     />
                   </div>
+                </div>
+              )}
+
+              {isRegistering && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Instituição de Ensino</label>
+                  <div className="relative">
+                    <select
+                      className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-semibold transition-all appearance-none"
+                      value={institution}
+                      onChange={(e) => setInstitution(e.target.value)}
+                    >
+                      {availableInstitutions.map(inst => (
+                        <option key={inst} value={inst}>{inst}</option>
+                      ))}
+                      <option value="Outra">Outra...</option>
+                    </select>
+                  </div>
+                  {institution === 'Outra' && (
+                    <div className="relative mt-2 animate-in fade-in slide-in-from-top-1">
+                      <input
+                        type="text"
+                        required
+                        className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-semibold transition-all"
+                        placeholder="Nome da sua instituição"
+                        value={customInstitution}
+                        onChange={(e) => setCustomInstitution(e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

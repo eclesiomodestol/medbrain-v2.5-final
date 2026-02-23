@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { Schedule } from './components/Schedule';
+import { WeeklySchedule } from './components/WeeklySchedule';
 import { ContentTracker } from './components/ContentTracker';
 import { ExamsPanel } from './components/ExamsPanel';
 import { Internships } from './components/Internships';
@@ -25,10 +26,10 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('medbrain_user');
     return saved ? JSON.parse(saved) : null;
   });
-  const [deletingItem, setDeletingItem] = useState<{ id: string, type: 'schedule' | 'internship' | 'topic' | 'pdf' | 'exam' | 'user' } | null>(null);
+  const [deletingItem, setDeletingItem] = useState<{ id: string, type: 'schedule' | 'internship' | 'topic' | 'pdf' | 'exam' | 'user' | 'subject' } | null>(null);
 
   const [users, setUsers] = useState<User[]>([]);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'syllabus' | 'exams' | 'estagio' | 'quiz' | 'users' | 'grades' | 'profile' | 'admin' | 'study'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'weekly-schedule' | 'schedule' | 'syllabus' | 'exams' | 'estagio' | 'quiz' | 'users' | 'grades' | 'profile' | 'admin' | 'study'>('dashboard');
   const [topics, setTopics] = useState<Topic[]>([]);
   const [scheduleData, setScheduleData] = useState<ScheduleEntry[]>([]);
   const [examsData, setExamsData] = useState<Exam[]>([]);
@@ -61,14 +62,14 @@ const App: React.FC = () => {
     if (!currentUser) return;
     try {
       const promises = [
-        supabase.from('subjects').select('*'),
-        supabase.from('topics').select('*'),
-        supabase.from('schedule').select('*').or(`user_id.eq.${currentUser.id},user_id.is.null`).throwOnError(),
-        supabase.from('exams').select('*'),
-        supabase.from('internships').select('id, title, local, location, evolution_model, status'),
-        supabase.from('users').select('*'),
+        supabase.from('subjects').select('*').eq('institution', currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte'),
+        supabase.from('topics').select('*').eq('institution', currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte'),
+        supabase.from('schedule').select('*').eq('institution', currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte').or(`user_id.eq.${currentUser.id},user_id.is.null`).throwOnError(),
+        supabase.from('exams').select('*').eq('institution', currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte'),
+        supabase.from('internships').select('id, title, local, location, evolution_model, status').eq('institution', currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte'),
+        supabase.from('users').select('*').eq('institution', currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte'),
         supabase.from('grades').select('*').or(`user_id.eq.${currentUser.id},user_id.is.null`),
-        supabase.from('quizzes').select('*').or(`user_id.eq.${currentUser.id},user_id.is.null`).order('created_at', { ascending: false })
+        supabase.from('quizzes').select('*').eq('institution', currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte').or(`user_id.eq.${currentUser.id},user_id.is.null`).order('created_at', { ascending: false })
       ];
 
       // Fetch progress (only relevant for non-admins usually, but good to have)
@@ -309,13 +310,30 @@ const App: React.FC = () => {
         user_id: currentUser?.id,
         title: quiz.title,
         questions: quiz.questions,
-        created_at: quiz.createdAt
+        created_at: quiz.createdAt,
+        institution: currentUser?.institution || 'FMJ IDOMED - Juazeiro do Norte'
       });
       if (error) throw error;
       setQuizzes(prev => [...prev, quiz]);
       setQuizHistory(prev => [quiz, ...prev]);
     } catch (err: any) {
       handleSupabaseError(err, "Salvar Simulado");
+    }
+  };
+
+  const handleAddSubject = async (subject: Subject) => {
+    setSubjectsState(prev => [...prev, subject]);
+    try {
+      const { error } = await supabase.from('subjects').insert({
+        id: subject.id,
+        name: subject.name,
+        color: subject.color,
+        institution: currentUser?.institution || 'FMJ IDOMED - Juazeiro do Norte'
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      setSubjectsState(prev => prev.filter(s => s.id !== subject.id));
+      handleSupabaseError(err, "Adicionar Disciplina");
     }
   };
 
@@ -344,7 +362,9 @@ const App: React.FC = () => {
         id: exam.id,
         title: packedTitle,
         date: exam.date,
-        subject_id: exam.subjectId
+        subject_id: exam.subjectId,
+        institution: currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte',
+        weight: exam.weight
       };
 
       const { error } = await supabase.from('exams').upsert(dbPayload);
@@ -447,64 +467,23 @@ const App: React.FC = () => {
 
     console.log(`Attempting to delete ${type} item:`, id);
 
-    if (type === 'schedule') {
-      // Optimistic Delete Schedule
-      setScheduleData(prev => prev.filter(s => s.id !== id));
-
-      try {
-        const { error, count } = await supabase.from('schedule').delete({ count: 'exact' }).eq('id', id);
-
-        if (error) {
-          console.error("Erro ao remover horário:", error);
-          alert("Erro ao remover: " + error.message);
-          // Rollback
-          const { data: rollbackData } = await supabase.from('schedule').select('*').eq('user_id', currentUser.id);
-          setScheduleData(rollbackData || []);
-          return;
-        }
-
-        // Re-fetch data
-        const { data: scheduleData, error: scheduleError } = await supabase.from('schedule').select('*').eq('user_id', currentUser.id);
-        if (scheduleError) console.error("Erro ao carregar horário:", scheduleError);
-        else setScheduleData(scheduleData || []);
-
-        // Refresh dependent data
-        const { data: quizzesData, error: quizzesError } = await supabase.from('quizzes').select('*');
-        if (quizzesError) console.error("Erro ao carregar quizzes:", quizzesError);
-        else setQuizzes(quizzesData || []);
-
-      } catch (err) {
-        handleSupabaseError(err, "Remover Horário");
-      }
-    } else if (type === 'internship') {
-      // Optimistic Delete Internship
-      setInternships(prev => prev.filter(i => i.id !== id));
-
-      try {
-        const { error } = await supabase.from('internships').delete().eq('id', id);
-        if (error) {
-          console.error("Erro ao deletar do banco:", error);
-          alert("Erro ao remover estágio: " + error.message);
-          // Re-fetch
-          const { data } = await supabase.from('internships').select('id, title, local, location, evolution_model, status');
-          if (data) setInternships(data.map((i: any) => ({ ...i, evolutionModel: i.evolution_model || '' })));
-        }
-      } catch (err) {
-        handleSupabaseError(err, "Remover Estágio");
-      }
-    } else if (type === 'exam') {
-      const previousExams = examsData;
-      setExamsData(prev => prev.filter(e => e.id !== id));
-      try {
-        const { error } = await supabase.from('exams').delete().eq('id', id);
-        if (error) {
-          setExamsData(previousExams);
-          throw error;
-        }
-      } catch (err: any) {
-        handleSupabaseError(err, "Excluir Prova");
-      }
-    } else if (type === 'user') {
+    if (deletingItem.type === 'topic') handleDeleteTopic(deletingItem.id);
+    if (deletingItem.type === 'exam') handleDeleteExam(deletingItem.id);
+    if (deletingItem.type === 'schedule') {
+      const prev = [...scheduleData];
+      setScheduleData(prevData => prevData.filter(s => s.id !== deletingItem.id));
+      supabase.from('schedule').delete().eq('id', deletingItem.id).then(({ error }) => {
+        if (error) { setScheduleData(prev); alert("Falha ao excluir."); }
+      });
+    }
+    if (deletingItem.type === 'internship') {
+      const prev = [...internships];
+      setInternships(p => p.filter(i => i.id !== deletingItem.id));
+      supabase.from('internships').delete().eq('id', deletingItem.id).then(({ error }) => {
+        if (error) { setInternships(prev); alert("Falha ao excluir estágio."); }
+      });
+    }
+    if (type === 'user') {
       const previousUsers = users;
       setUsers(prev => prev.filter(u => u.id !== id));
       try {
@@ -573,8 +552,20 @@ const App: React.FC = () => {
       } catch (err: any) {
         handleSupabaseError(err, "Excluir Conteúdo");
       }
+    } else if (type === 'subject') {
+      const previousSubjects = subjectsState;
+      setSubjectsState(prev => prev.filter(s => s.id !== id));
+      try {
+        const { error } = await supabase.from('subjects').delete().eq('id', id);
+        if (error) {
+          setSubjectsState(previousSubjects);
+          throw error;
+        }
+      } catch (err: any) {
+        handleSupabaseError(err, "Excluir Disciplina");
+      }
     }
-  }, [deletingItem, currentUser, topics]);
+  }, [deletingItem, currentUser, topics, scheduleData, internships, users, examsData, subjectsState]);
 
   if (!currentUser) return <Login onLogin={handleLogin} users={users} />;
 
@@ -604,7 +595,7 @@ const App: React.FC = () => {
               </button>
               <div className="space-y-1">
                 <h1 className="text-3xl font-black text-[#0F172A] tracking-tight capitalize">
-                  {activeTab === 'exams' ? 'Calendário de Provas' : activeTab === 'syllabus' ? 'Ementa e Conteúdos' : activeTab === 'schedule' ? 'Horário Acadêmico' : activeTab.replace('-', ' ')}
+                  {activeTab === 'exams' ? 'Calendário de Provas' : activeTab === 'syllabus' ? 'Ementa e Conteúdos' : activeTab === 'schedule' ? 'Horário Fixo' : activeTab === 'weekly-schedule' ? 'Cronograma da Semana' : activeTab.replace('-', ' ')}
                 </h1>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   MedBrain Engine v2.5 • Ciclo Clínico (7º Semestre)
@@ -624,6 +615,18 @@ const App: React.FC = () => {
                 quizzes={quizzes}
                 currentUser={currentUser}
                 setActiveTab={setActiveTab}
+              />
+            )}
+
+            {activeTab === 'weekly-schedule' && (
+              <WeeklySchedule
+                topics={filteredTopics}
+                subjects={subjectsState}
+                exams={examsData}
+                internships={internships}
+                studentProgress={studentProgress}
+                onUpdateStatus={handleUpdateContentStatus}
+                isAdmin={currentUser.role === 'admin'}
               />
             )}
 
@@ -680,7 +683,8 @@ const App: React.FC = () => {
                       tag: newTopic.tag,
                       front: newTopic.front,
                       status: ContentStatus.PENDENTE,
-                      has_media: false
+                      has_media: false,
+                      institution: currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte'
                     };
 
                     console.log('Tentando inserir conteúdo:', dbPayload);
@@ -732,7 +736,8 @@ const App: React.FC = () => {
                       tag: topic.tag,
                       front: topic.front,
                       status: ContentStatus.PENDENTE,
-                      has_media: false
+                      has_media: false,
+                      institution: currentUser.institution || 'FMJ IDOMED - Juazeiro do Norte'
                     }));
 
                     console.log(`Tentando inserir ${dbPayloads.length} conteúdos em lote...`);
@@ -746,7 +751,8 @@ const App: React.FC = () => {
                         const safe = { ...p };
                         delete (safe as any).shift;
                         return safe;
-                      });
+                      }
+                      );
                       const { error: retryError } = await supabase.from('topics').insert(safePayloads);
                       if (retryError) {
                         console.error('Erro no retry:', retryError);
@@ -778,6 +784,7 @@ const App: React.FC = () => {
                 onUploadPDF={() => { }}
                 onDeleteTopic={handleDeleteTopic}
                 onSaveQuiz={handleSaveQuiz}
+                onAddSubject={handleAddSubject}
               />
             )}
             {activeTab === 'schedule' && (
@@ -818,7 +825,8 @@ const App: React.FC = () => {
                       period: entry.period,
                       subject_id: entry.subjectId,
                       front: entry.front,
-                      user_id: currentUser?.id
+                      user_id: currentUser?.id,
+                      institution: currentUser?.institution || 'FMJ IDOMED - Juazeiro do Norte'
                     });
 
                     if (error) {
@@ -893,7 +901,8 @@ const App: React.FC = () => {
                     title: internship.title,
                     local: internship.local,
                     evolution_model: JSON.stringify(packedData),
-                    status: internship.status
+                    status: internship.status,
+                    institution: currentUser?.institution || 'FMJ IDOMED - Juazeiro do Norte'
                   };
 
                   try {
@@ -953,9 +962,9 @@ const App: React.FC = () => {
                 onUpdateUser={handleUpdateUser}
               />
             )}
-            {activeTab === 'grades' && <GradesPanel subjects={subjectsState} grades={grades} onUpdate={handleUpdateGrades} />}
+            {activeTab === 'grades' && <GradesPanel subjects={subjectsState} grades={grades} exams={examsData} onUpdate={handleUpdateGrades} />}
             {activeTab === 'study' && <StudyReports currentUser={currentUser} />}
-            {activeTab === 'admin' && currentUser?.role === 'admin' && <AdminPanel />}
+            {activeTab === 'admin' && currentUser?.role === 'admin' && <AdminPanel currentUser={currentUser} />}
             {activeTab === 'users' && (
               <UserManagement
                 users={users}
