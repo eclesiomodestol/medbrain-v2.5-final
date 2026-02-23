@@ -153,9 +153,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return topics
       .filter(t => t.hasMedia || t.pdfUrl)
       .sort((a, b) => {
-        // Sort by createdAt descending (newest first)
-        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        // Obter data de upload do PDF pelo próprio link, ou fallback pra data de criação
+        const getTimestamp = (topic: Topic) => {
+          if (topic.pdfUrl) {
+            const match = topic.pdfUrl.match(/_(\d+)\.pdf$/i);
+            if (match && match[1]) {
+              return parseInt(match[1], 10);
+            }
+          }
+          return topic.createdAt ? new Date(topic.createdAt).getTime() : 0;
+        };
+
+        const dateA = getTimestamp(a);
+        const dateB = getTimestamp(b);
         return dateB - dateA;
       })
       .slice(0, 5);
