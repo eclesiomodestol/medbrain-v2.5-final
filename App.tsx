@@ -238,6 +238,26 @@ const App: React.FC = () => {
 
   const filteredTopics = useMemo(() => topics.filter(t => isAccessible(t.subjectId, t.front)), [topics, isAccessible]);
 
+  const filteredExams = useMemo(() => examsData.filter(e => isAccessible(e.subjectId)), [examsData, isAccessible]);
+
+  const filteredInternships = useMemo(() => internships.filter(i => {
+    if (currentUser?.role === 'admin') return true;
+    // Client-side filtering strategy
+    // 1. Optimistic / Direct Ownership check
+    if ((i as any).uid === currentUser?.id) return true;
+    if ((i as any).user_id && (i as any).user_id === currentUser?.id) return true;
+
+    if (i.evolutionModel && i.evolutionModel.startsWith('{"p":true')) {
+      try {
+        const p = JSON.parse(i.evolutionModel);
+        return p.uid === currentUser?.id;
+      } catch { return false; }
+    }
+    // Legacy with no owner info: HIDE to prevent sharing.
+    return false;
+  }), [internships, currentUser]);
+
+
   const uploadPDF = useCallback(async (topicId: string, file: File, summary: string) => {
     const fileName = `med_${topicId}_${Date.now()}.pdf`;
     try {
@@ -622,8 +642,8 @@ const App: React.FC = () => {
               <WeeklySchedule
                 topics={filteredTopics}
                 subjects={subjectsState}
-                exams={examsData}
-                internships={internships}
+                exams={filteredExams}
+                internships={filteredInternships.filter(i => i.status !== 'Concluído')}
                 studentProgress={studentProgress}
                 onUpdateStatus={handleUpdateContentStatus}
                 isAdmin={currentUser.role === 'admin'}
@@ -854,7 +874,7 @@ const App: React.FC = () => {
             {activeTab === 'exams' && (
               <ExamsPanel
                 topics={filteredTopics}
-                exams={examsData}
+                exams={filteredExams}
                 subjects={subjectsState}
                 quizzes={quizzes}
                 studentProgress={studentProgress}
@@ -865,21 +885,7 @@ const App: React.FC = () => {
             )}
             {activeTab === 'estagio' && (
               <Internships
-                internships={internships.filter(i => {
-                  // Client-side filtering strategy
-                  // 1. Optimistic / Direct Ownership check
-                  if ((i as any).uid === currentUser?.id) return true;
-                  if ((i as any).user_id && (i as any).user_id === currentUser?.id) return true;
-
-                  if (i.evolutionModel && i.evolutionModel.startsWith('{"p":true')) {
-                    try {
-                      const p = JSON.parse(i.evolutionModel);
-                      return p.uid === currentUser?.id;
-                    } catch { return false; }
-                  }
-                  // Legacy with no owner info: HIDE to prevent sharing.
-                  return false;
-                })}
+                internships={filteredInternships}
                 onAdd={async (internship) => {
                   // OPTIMISTIC UPDATE: Add to UI immediately
                   // We add the 'uid' to the local object so it passes the ownership filter
