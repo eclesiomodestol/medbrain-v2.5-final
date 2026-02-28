@@ -75,8 +75,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, subjects,
         </div>
       </div>
 
-      <div className="bg-white rounded-[40px] border shadow-sm overflow-hidden">
-        <table className="w-full text-left border-collapse">
+      <div className="bg-white rounded-[40px] border shadow-sm overflow-x-auto">
+        <table className="w-full min-w-[800px] text-left border-collapse">
           <thead className="bg-slate-50/50 border-b border-slate-100">
             <tr>
               <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Usuário</th>
@@ -137,8 +137,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, subjects,
                                       key={spec}
                                       onClick={() => toggleSubject(user, spec)}
                                       className={`text-[8px] font-bold px-1.5 py-0.5 rounded border transition-all ${hasSpecAccess
-                                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                          : 'bg-white text-slate-300 border-slate-100'
+                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                        : 'bg-white text-slate-300 border-slate-100'
                                         }`}
                                     >
                                       {spec}

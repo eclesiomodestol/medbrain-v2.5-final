@@ -604,7 +604,7 @@ const App: React.FC = () => {
         {/* Floating Pomodoro Timer */}
         <PomodoroTimer subjects={subjectsState} subspecialties={SUBJECT_SUBSPECIALTIES} />
 
-        <main className="flex-1 p-4 lg:p-8 lg:ml-64 overflow-y-auto">
+        <main className="flex-1 p-4 lg:p-8 lg:ml-64 overflow-y-auto overflow-x-hidden">
           <header className="mb-8 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button

@@ -666,7 +666,7 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
 
           {/* Subject Filter */}
           <div className="relative">
@@ -775,7 +775,7 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
         )}
 
         {isAdmin && (
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button
               onClick={() => { setIsAddingSubject(!isAddingSubject); setIsAdding(false); setShowCSVImporter(false); }}
               className="px-6 py-4 bg-emerald-600 text-white rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg active:scale-95"
@@ -889,8 +889,8 @@ export const ContentTracker: React.FC<ContentTrackerProps> = ({
         </div>
       )}
 
-      <div className="bg-white rounded-[40px] border shadow-sm overflow-hidden min-h-[400px]">
-        <table className="w-full text-left">
+      <div className="bg-white rounded-[40px] border shadow-sm overflow-x-auto min-h-[400px]">
+        <table className="w-full min-w-[1000px] text-left">
           <thead className="bg-slate-50 border-b">
             <tr>
               <th onClick={() => handleSort('status')} className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[160px] cursor-pointer hover:text-blue-600 transition-colors select-none">

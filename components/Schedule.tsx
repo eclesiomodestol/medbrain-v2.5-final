@@ -172,70 +172,74 @@ export const Schedule: React.FC<ScheduleProps> = ({ schedule, subjects, onUpdate
         </button>
       </div>
 
-      <div className="grid grid-cols-6 border-b border-slate-100">
-        <div className="p-4 bg-slate-50/50 border-r border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center">Hora</div>
-        {days.map(day => (
-          <div key={day} className="p-4 bg-slate-50/50 border-r border-slate-100 text-[11px] font-black text-slate-900 text-center uppercase tracking-widest">
-            {day}
-          </div>
-        ))}
-      </div>
-
-      {periods.map(period => (
-        <div key={period} className="grid grid-cols-6 border-b border-slate-100 last:border-0 min-h-[160px]">
-          <div className="p-4 border-r border-slate-100 bg-slate-50/30 flex flex-col items-center justify-center gap-1">
-            <span className="font-black text-xs uppercase tracking-widest text-slate-900">{period}</span>
-          </div>
-
-          {days.map(day => {
-            const entries = getEntries(day, period);
-            return (
-              <div key={`${day}-${period}`} className="p-3 border-r border-slate-100 last:border-0 flex flex-col gap-2 bg-slate-50/10 group relative">
-                <div className="flex flex-col gap-2 h-full">
-                  {entries.map((entry, idx) => {
-                    const subject = subjects.find(s => s.id === entry.subjectId);
-                    return (
-                      <div
-                        key={idx}
-                        onClick={() => handleEditClick(day, period, entry)}
-                        className={`p-3 rounded-xl border ${getSubjectColorStyles(entry.subjectId)} flex flex-col gap-1 shadow-sm cursor-pointer hover:scale-[1.02] hover:shadow-md transition-all relative overflow-hidden group/card min-h-[60px]`}
-                      >
-                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              onDelete(entry.id);
-                            }}
-                            className="p-1.5 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-lg transition-colors shadow-sm cursor-pointer z-50 pointer-events-auto"
-                            title="Remover"
-                          >
-                            <Trash2 size={12} strokeWidth={2.5} />
-                          </button>
-                        </div>
-                        <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-60">
-                          {entry.front || 'Tronco Comum'}
-                        </span>
-                        <span className="text-xs font-black leading-tight">
-                          {subject?.name}
-                        </span>
-                      </div>
-                    );
-                  })}
-
-                  <button
-                    onClick={() => handleEditClick(day, period)}
-                    className={`border-2 border-dashed border-slate-100 rounded-xl flex items-center justify-center text-[10px] text-slate-300 font-black uppercase tracking-widest hover:border-blue-200 hover:text-blue-400 hover:bg-blue-50/30 transition-all group/add ${entries.length === 0 ? 'h-full min-h-[100px]' : 'h-[40px] opacity-0 group-hover:opacity-100'}`}
-                  >
-                    <Plus size={16} className="mb-0.5 group-hover/add:scale-125 transition-transform" />
-                  </button>
-                </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[800px]">
+          <div className="grid grid-cols-6 border-b border-slate-100">
+            <div className="p-4 bg-slate-50/50 border-r border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center">Hora</div>
+            {days.map(day => (
+              <div key={day} className="p-4 bg-slate-50/50 border-r border-slate-100 text-[11px] font-black text-slate-900 text-center uppercase tracking-widest">
+                {day}
               </div>
-            );
-          })}
+            ))}
+          </div>
+
+          {periods.map(period => (
+            <div key={period} className="grid grid-cols-6 border-b border-slate-100 last:border-0 min-h-[160px]">
+              <div className="p-4 border-r border-slate-100 bg-slate-50/30 flex flex-col items-center justify-center gap-1">
+                <span className="font-black text-xs uppercase tracking-widest text-slate-900">{period}</span>
+              </div>
+
+              {days.map(day => {
+                const entries = getEntries(day, period);
+                return (
+                  <div key={`${day}-${period}`} className="p-3 border-r border-slate-100 last:border-0 flex flex-col gap-2 bg-slate-50/10 group relative">
+                    <div className="flex flex-col gap-2 h-full">
+                      {entries.map((entry, idx) => {
+                        const subject = subjects.find(s => s.id === entry.subjectId);
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => handleEditClick(day, period, entry)}
+                            className={`p-3 rounded-xl border ${getSubjectColorStyles(entry.subjectId)} flex flex-col gap-1 shadow-sm cursor-pointer hover:scale-[1.02] hover:shadow-md transition-all relative overflow-hidden group/card min-h-[60px]`}
+                          >
+                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  onDelete(entry.id);
+                                }}
+                                className="p-1.5 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-lg transition-colors shadow-sm cursor-pointer z-50 pointer-events-auto"
+                                title="Remover"
+                              >
+                                <Trash2 size={12} strokeWidth={2.5} />
+                              </button>
+                            </div>
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-60">
+                              {entry.front || 'Tronco Comum'}
+                            </span>
+                            <span className="text-xs font-black leading-tight">
+                              {subject?.name}
+                            </span>
+                          </div>
+                        );
+                      })}
+
+                      <button
+                        onClick={() => handleEditClick(day, period)}
+                        className={`border-2 border-dashed border-slate-100 rounded-xl flex items-center justify-center text-[10px] text-slate-300 font-black uppercase tracking-widest hover:border-blue-200 hover:text-blue-400 hover:bg-blue-50/30 transition-all group/add ${entries.length === 0 ? 'h-full min-h-[100px]' : 'h-[40px] opacity-0 group-hover:opacity-100'}`}
+                      >
+                        <Plus size={16} className="mb-0.5 group-hover/add:scale-125 transition-transform" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
     </div>
   );
 };
